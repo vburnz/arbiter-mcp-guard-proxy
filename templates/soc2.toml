@@ -1,0 +1,151 @@
+# Arbiter Policy Template: SOC 2 Compliance
+#
+# SOC 2 (System and Organization Controls 2) focuses on five trust service
+# criteria: security, availability, processing integrity, confidentiality,
+# and privacy. From an AI agent governance perspective, the key requirements
+# are:
+#
+#   - Audit completeness: every tool call must be logged (Arbiter default).
+#   - Least privilege: agents operate with minimal required permissions.
+#   - Destructive operation controls: write/modify/delete require elevated trust.
+#   - Administrative oversight: admin operations are escalated for human review.
+#   - Session integrity: all sessions must declare intent (enforced by config).
+#   - Batch size limits: prevent bulk data operations that bypass controls.
+#
+# Usage:
+#   [policy]
+#   file = "templates/soc2.toml"
+#
+# Pair with these config settings for full SOC 2 coverage:
+#   [sessions]
+#   require_session = true
+#   [audit]
+#   enabled = true
+
+# ---------------------------------------------------------------------------
+# Policy 1: Allow read-only tools for all trust levels
+# ---------------------------------------------------------------------------
+# Any agent at basic trust or above can use read/query/list/search tools.
+# This satisfies availability requirements while maintaining least privilege.
+[[policies]]
+id = "soc2-allow-read-only"
+effect = "allow"
+allowed_tools = [
+    "read_file",
+    "list_dir",
+    "search",
+    "query",
+    "get_status",
+    "list_records",
+    "describe_resource",
+]
+priority = 10
+
+[policies.agent_match]
+trust_level = "basic"
+
+# ---------------------------------------------------------------------------
+# Policy 2: Deny destructive operations for unverified agents
+# ---------------------------------------------------------------------------
+# Write, modify, and delete operations require at least "verified" trust.
+# Agents below that threshold are denied. This enforces change-control
+# requirements from SOC 2 CC8.1 (change management).
+[[policies]]
+id = "soc2-deny-destructive-unverified"
+effect = "deny"
+allowed_tools = [
+    "write_file",
+    "modify_record",
+    "delete_file",
+    "delete_record",
+    "update_config",
+    "drop_table",
+]
+priority = 60
+
+[policies.agent_match]
+trust_level = "basic"
+
+# ---------------------------------------------------------------------------
+# Policy 3: Allow destructive operations for verified agents
+# ---------------------------------------------------------------------------
+# Verified agents may perform write/modify/delete, subject to parameter
+# constraints that cap batch sizes to prevent bulk operations.
+[[policies]]
+id = "soc2-allow-destructive-verified"
+effect = "allow"
+allowed_tools = [
+    "write_file",
+    "modify_record",
+    "delete_file",
+    "delete_record",
+    "update_config",
+]
+priority = 70
+
+[policies.agent_match]
+trust_level = "verified"
+
+[[policies.parameter_constraints]]
+key = "batch_size"
+max_value = 50.0
+
+[[policies.parameter_constraints]]
+key = "limit"
+max_value = 100.0
+
+# ---------------------------------------------------------------------------
+# Policy 4: Escalate all admin-level operations
+# ---------------------------------------------------------------------------
+# Administrative tools always require human-in-the-loop review, regardless
+# of agent trust level. Satisfies SOC 2 CC6.1 (logical access controls)
+# and CC6.3 (role-based access).
+[[policies]]
+id = "soc2-escalate-admin"
+effect = "escalate"
+allowed_tools = [
+    "create_user",
+    "delete_user",
+    "modify_permissions",
+    "create_admin_agent",
+    "rotate_credentials",
+    "change_policy",
+]
+priority = 200
+
+# ---------------------------------------------------------------------------
+# Policy 5: Deny audit log tampering
+# ---------------------------------------------------------------------------
+# No agent, regardless of trust level, may access tools that modify or
+# delete audit records. Satisfies SOC 2 CC7.2 (system monitoring) and
+# CC4.1 (monitoring activities).
+[[policies]]
+id = "soc2-deny-audit-tampering"
+effect = "deny"
+allowed_tools = [
+    "delete_audit_logs",
+    "modify_audit_logs",
+    "truncate_logs",
+    "clear_history",
+]
+priority = 300
+
+# ---------------------------------------------------------------------------
+# Policy 6: Deny bulk data export without intent declaration
+# ---------------------------------------------------------------------------
+# Bulk export tools are denied unless the agent's declared intent matches
+# recognized data-handling keywords. This prevents unauthorized data
+# exfiltration (SOC 2 CC6.7, restricting data transmission).
+[[policies]]
+id = "soc2-deny-bulk-export"
+effect = "deny"
+allowed_tools = [
+    "export_data",
+    "bulk_download",
+    "dump_database",
+    "export_records",
+]
+priority = 150
+
+[policies.intent_match]
+regex = "(?i)export|download|dump|extract"

@@ -1,0 +1,348 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  tag:
+    if: github.ref == 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate tag
+        id: tag
+        run: |
+          # Auto-increment patch from latest tag, or start at v0.0.1
+          LATEST=$(git tag -l 'v*' --sort=-v:refname | head -1)
+          if [ -z "$LATEST" ]; then
+            TAG="v0.0.1"
+          else
+            # Increment patch version
+            MAJOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f1)
+            MINOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f2)
+            PATCH=$(echo "$LATEST" | sed 's/v//' | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Tagging as $TAG"
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          git tag "$TAG"
+          git push origin "$TAG"
+
+  build:
+    needs: [tag]
+    if: always() && (needs.tag.result == 'success' || startsWith(github.ref, 'refs/tags/'))
+    env:
+      RELEASE_TAG: ${{ needs.tag.outputs.tag || github.ref_name }}
+
+    strategy:
+      matrix:
+        include:
+          # musl (static) — default Linux binaries
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            name: arbiter-linux-amd64
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            name: arbiter-linux-arm64
+          # glibc — secondary Linux binaries
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: arbiter-linux-gnu-amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: arbiter-linux-gnu-arm64
+          # macOS
+          - target: x86_64-apple-darwin
+            os: macos-14
+            name: arbiter-macos-amd64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: arbiter-macos-arm64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: contains(matrix.target, 'aarch64') && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Install musl tools
+        if: contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          if [[ "${{ matrix.target }}" == "aarch64"* ]]; then
+            sudo apt-get install -y musl-dev:arm64 || true
+          fi
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
+
+      - name: Package
+        shell: bash
+        env:
+          ARTIFACT_NAME: ${{ matrix.name }}
+          BUILD_TARGET: ${{ matrix.target }}
+          TAG_NAME: ${{ env.RELEASE_TAG }}
+        run: |
+          STAGING="arbiter-${TAG_NAME}-${BUILD_TARGET}"
+          mkdir -p "${STAGING}"
+
+          cp "target/${BUILD_TARGET}/release/arbiter" "${STAGING}/arbiter"
+          chmod +x "${STAGING}/arbiter"
+
+          # Include arbiter-ctl if it was built
+          if [ -f "target/${BUILD_TARGET}/release/arbiter-ctl" ]; then
+            cp "target/${BUILD_TARGET}/release/arbiter-ctl" "${STAGING}/arbiter-ctl"
+            chmod +x "${STAGING}/arbiter-ctl"
+          fi
+
+          # Include starter config and docs
+          cp deploy/arbiter.toml "${STAGING}/arbiter.toml"
+          cp LICENSE "${STAGING}/LICENSE" 2>/dev/null || true
+          cp README.md "${STAGING}/README.md" 2>/dev/null || true
+
+          tar czf "${ARTIFACT_NAME}.tar.gz" "${STAGING}"
+          shasum -a 256 "${ARTIFACT_NAME}.tar.gz" > "${ARTIFACT_NAME}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            ${{ matrix.name }}.tar.gz
+            ${{ matrix.name }}.tar.gz.sha256
+
+  release:
+    needs: [tag, build]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ needs.tag.outputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: arbiter-*
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: artifacts
+        run: |
+          cat *.sha256 > checksums-sha256.txt
+
+      - name: Sign with minisign
+        working-directory: artifacts
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          if [ -z "$MINISIGN_SECRET_KEY" ]; then
+            echo "::error::MINISIGN_SECRET_KEY not set — releases must be signed"
+            exit 1
+          fi
+          # Install minisign (extract only the x86_64 binary)
+          curl -sSfL https://github.com/jedisct1/minisign/releases/download/0.11/minisign-0.11-linux.tar.gz \
+            | tar xz --strip-components=2 minisign-linux/x86_64/minisign
+          chmod +x minisign
+
+          # Sign each tarball and the consolidated checksums
+          echo "${MINISIGN_SECRET_KEY}" > /tmp/minisign.key
+          for tarball in *.tar.gz; do
+            ./minisign -Sm "$tarball" -s /tmp/minisign.key -t "Arbiter ${{ env.RELEASE_TAG }}"
+          done
+          ./minisign -Sm checksums-sha256.txt -s /tmp/minisign.key -t "Arbiter ${{ env.RELEASE_TAG }}"
+          rm -f /tmp/minisign.key
+
+      - name: Generate attestations
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: artifacts/*.tar.gz
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ env.RELEASE_TAG }}
+        run: |
+          ASSETS=(artifacts/*.tar.gz artifacts/checksums-sha256.txt deploy/arbiter.toml)
+          # Include signatures if minisign was configured
+          if ls artifacts/*.minisig &>/dev/null; then
+            ASSETS+=(artifacts/*.minisig)
+          fi
+          gh release create "${TAG_NAME}" \
+            --title "Arbiter ${TAG_NAME}" \
+            --generate-notes \
+            "${ASSETS[@]}"
+
+  docker:
+    needs: [tag]
+    if: always() && (needs.tag.result == 'success' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push container
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  publish-crates:
+    needs: [tag]
+    if: always() && (needs.tag.result == 'success' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: publish
+
+      - name: Sync crate versions to release tag
+        env:
+          RELEASE_TAG: ${{ needs.tag.outputs.tag || github.ref_name }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          CURRENT=$(grep -m1 'version = "' Cargo.toml | sed 's/.*version = "\([^"]*\)".*/\1/')
+          if [ "$VERSION" != "$CURRENT" ]; then
+            echo "Updating crate versions: $CURRENT -> $VERSION"
+            find . -name Cargo.toml -exec sed -i "s/version = \"$CURRENT\"/version = \"$VERSION\"/g" {} +
+          else
+            echo "Versions already at $VERSION"
+          fi
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::warning::CARGO_REGISTRY_TOKEN not set, skipping publish"
+            exit 0
+          fi
+          # Topological publish order (leaves first, dev-deps included)
+          CRATES=(
+            arbiter-mcp
+            arbiter-storage
+            arbiter-metrics
+            arbiter-audit
+            arbiter-session
+            arbiter-identity
+            arbiter-behavior
+            arbiter-proxy
+            arbiter-credential
+            arbiter-policy
+            arbiter-oauth
+            arbiter-lifecycle
+            arbiter-cli
+            mcp-gateway-firewall
+          )
+
+          for crate in "${CRATES[@]}"; do
+            echo "::group::Publishing $crate"
+            for attempt in 1 2 3 4 5; do
+              OUTPUT=$(cargo publish -p "$crate" --no-verify --allow-dirty 2>&1) && {
+                echo "Published $crate"
+                break
+              }
+              echo "$OUTPUT"
+              if echo "$OUTPUT" | grep -q "already exists"; then
+                echo "$crate already published, skipping"
+                break
+              fi
+              if [ $attempt -eq 5 ]; then
+                echo "::error::Failed to publish $crate after 5 attempts"
+                exit 1
+              fi
+              # Back off on rate limits using the server's retry-after time
+              if echo "$OUTPUT" | grep -q "429"; then
+                RETRY_AFTER=$(echo "$OUTPUT" | sed -n 's/.*try again after \(.*\) and see.*/\1/p')
+                if [ -n "$RETRY_AFTER" ]; then
+                  TARGET=$(date -d "$RETRY_AFTER" +%s 2>/dev/null || echo 0)
+                  NOW=$(date +%s)
+                  WAIT=$((TARGET - NOW + 10))
+                  if [ "$WAIT" -gt 0 ] && [ "$WAIT" -lt 600 ]; then
+                    echo "Rate limited, sleeping ${WAIT}s until $RETRY_AFTER"
+                    sleep "$WAIT"
+                  else
+                    echo "Rate limited, waiting 180s..."
+                    sleep 180
+                  fi
+                else
+                  echo "Rate limited, waiting 180s..."
+                  sleep 180
+                fi
+              else
+                echo "Attempt $attempt failed, waiting 30s..."
+                sleep 30
+              fi
+            done
+            sleep 20
+            echo "::endgroup::"
+          done

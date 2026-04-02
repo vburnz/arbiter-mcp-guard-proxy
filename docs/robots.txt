@@ -1,0 +1,7 @@
+# Arbiter: IAM Gateway for AI Agents
+# https://vburnz.github.io/mcp-gateway-firewall/
+
+User-agent: *
+Allow: /
+
+Sitemap: https://vburnz.github.io/mcp-gateway-firewall/sitemap.xml

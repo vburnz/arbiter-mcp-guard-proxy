@@ -1,0 +1,34 @@
+[default]
+# Workspace coverage configuration for arbiter-gateway
+# Run: cargo tarpaulin --config tarpaulin.toml
+
+# Target all workspace crates
+workspace = true
+
+# Line coverage mode
+count = false
+
+# Fail if coverage drops materially below the current workspace baseline.
+# The observed workspace line coverage is ~75%, so 74% preserves a real
+# regression gate without making CI permanently red.
+fail-under = 74
+
+# Verbose output
+verbose = true
+
+# Output configuration
+output-dir = "target/tarpaulin-coverage"
+out = ["Html", "Json", "Lcov"]
+
+# Exclude files from coverage measurement
+exclude-files = [
+    "tests/*",
+    "benches/*",
+    "*/main.rs",
+]
+
+# Exclude test code from coverage
+ignore-tests = true
+
+# Per-test timeout — property tests under instrumentation need headroom
+timeout = "300s"

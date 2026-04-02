@@ -1,0 +1,58 @@
+# Arbiter on Fly.io
+#
+# Deploy in under 3 minutes:
+#   fly launch --config deploy/fly.toml
+#   fly secrets set ARBITER_UPSTREAM_URL=https://your-mcp-server.example.com
+#   fly secrets set ARBITER_ADMIN_API_KEY=your-secure-key
+#
+# Verify:
+#   curl https://my-arbiter-proxy.fly.dev/health
+
+app = "my-arbiter-proxy"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ARBITER_PROXY_PORT = "8080"
+  ARBITER_ADMIN_PORT = "9090"
+  ARBITER_LOG_LEVEL = "info"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+[[services]]
+  internal_port = 9090
+  protocol = "tcp"
+
+  # Admin API. Restrict to private network or allowlisted IPs.
+  # Do NOT expose publicly without additional access controls.
+  [[services.ports]]
+    port = 9090
+    handlers = ["tls"]
+
+  [[services.tcp_checks]]
+    interval = "30s"
+    timeout = "5s"
+
+[checks]
+  [checks.health]
+    port = 8080
+    type = "http"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

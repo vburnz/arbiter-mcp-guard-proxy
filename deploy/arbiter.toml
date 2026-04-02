@@ -1,0 +1,166 @@
+# Arbiter: Starter Configuration
+#
+# This file gets you from zero to running proxy. Every section is commented
+# so you can tune it for your environment. Works out of the box for local
+# development; change the [admin] secrets before deploying to production.
+#
+# Usage:
+#   arbiter --config arbiter.toml
+#
+# Environment variable overrides (set by Docker/Fly.io/Railway):
+#   ARBITER_UPSTREAM_URL   → [proxy] upstream_url
+#   ARBITER_ADMIN_API_KEY  → [admin] api_key
+
+
+# ── Proxy ───────────────────────────────────────────────────────────────
+# The proxy sits between your MCP clients and the upstream MCP server.
+# All traffic flows through the 9-stage middleware chain.
+
+[proxy]
+# Bind to all interfaces so Docker/Fly.io/Railway can route traffic in.
+listen_addr = "0.0.0.0"
+listen_port = 8080
+
+# The upstream MCP server that Arbiter proxies to.
+# Override with ARBITER_UPSTREAM_URL in your environment.
+upstream_url = "http://127.0.0.1:3001"
+
+# Require a valid session header on every MCP request.
+# Without this, agents can bypass session budgets and behavioral tracking.
+require_session = true
+
+# Reject non-MCP POST bodies (prevents protocol confusion attacks).
+strict_mcp = true
+
+
+# ── Sessions ────────────────────────────────────────────────────────────
+# Every agent interaction runs inside a session with time and call budgets.
+# Sessions enable behavioral tracking, rate limiting, and clean teardown.
+
+[sessions]
+# Maximum session duration: 1 hour.
+default_time_limit_secs = 3600
+
+# Maximum tool calls per session before the session is exhausted.
+default_call_budget = 1000
+
+# When true, behavioral anomalies (e.g., a "read-only" session attempting
+# writes) result in hard denials. When false, anomalies are flagged in
+# audit but the request is still forwarded.
+escalate_anomalies = false
+
+
+# ── Audit ───────────────────────────────────────────────────────────────
+# Structured audit logging for every MCP tool call. Captures: who called
+# what, with which arguments, what policy matched, and any anomaly flags.
+
+[audit]
+enabled = true
+
+# Uncomment to write audit entries to a file (append-only JSONL format):
+# file_path = "/var/log/arbiter/audit.jsonl"
+
+# PII redaction: field names matching these patterns have their values
+# replaced with "[REDACTED]" in audit output. Add patterns relevant to
+# your domain.
+redaction_patterns = ["password", "secret", "token", "key", "ssn", "credit_card"]
+
+# Uncomment to stream audit entries to a webhook:
+# webhook_url = "https://your-siem.example.com/arbiter/events"
+# webhook_auth_token = "Bearer your-webhook-token"
+
+
+# ── Metrics ─────────────────────────────────────────────────────────────
+# Exposes a /metrics endpoint on the proxy port for Prometheus scraping.
+
+[metrics]
+enabled = true
+
+
+# ── Admin API ───────────────────────────────────────────────────────────
+# The admin API handles session creation, agent registration, policy
+# management, and health checks. Runs on a separate port.
+
+[admin]
+listen_addr = "0.0.0.0"
+listen_port = 9090
+
+# CHANGE THESE IN PRODUCTION. The defaults are for local development only.
+# Override api_key with ARBITER_ADMIN_API_KEY in your environment.
+api_key = "arbiter-dev-key"
+signing_secret = "arbiter-dev-secret-change-in-production"
+
+# Agent tokens expire after 1 hour.
+token_expiry_secs = 3600
+
+
+# ── Policy Engine ───────────────────────────────────────────────────────
+# Deny-by-default authorization. Policies are evaluated by specificity:
+# the most specific matching rule wins. If no rule matches, the request
+# is denied.
+#
+# To load policies from a separate file instead of inline:
+#   [policy]
+#   file = "/etc/arbiter/policies.toml"
+
+# Rule 1: Allow common read/query tools for any agent.
+# This is a broad "safe by default" baseline. Read operations are low risk.
+[[policy.policies]]
+id = "allow-read-tools"
+effect = "allow"
+allowed_tools = [
+    "read_file",
+    "list_dir",
+    "search",
+    "query",
+    "get_status",
+    "describe",
+    "list_tools",
+]
+[policy.policies.intent_match]
+keywords = ["read", "analyze", "review", "query", "search"]
+
+# Rule 2: Allow write tools only for verified agents.
+# Agents must be registered with trust_level >= Verified to create or modify.
+[[policy.policies]]
+id = "allow-write-for-verified"
+effect = "allow"
+allowed_tools = [
+    "write_file",
+    "create",
+    "update",
+    "modify",
+    "deploy",
+]
+[policy.policies.agent_match]
+trust_level = "Verified"
+
+# Rule 3: Deny destructive operations for all agents below Trusted.
+# Delete, drop, and admin operations require the highest trust level.
+[[policy.policies]]
+id = "deny-destructive-unless-trusted"
+effect = "deny"
+allowed_tools = [
+    "delete",
+    "drop",
+    "truncate",
+    "create_admin",
+    "delete_audit_logs",
+    "modify_permissions",
+]
+
+# Rule 4: Allow destructive operations for Trusted agents only.
+# This overrides Rule 3 for agents that have been explicitly promoted.
+[[policy.policies]]
+id = "allow-destructive-for-trusted"
+effect = "allow"
+allowed_tools = [
+    "delete",
+    "drop",
+    "truncate",
+    "create_admin",
+    "delete_audit_logs",
+    "modify_permissions",
+]
+[policy.policies.agent_match]
+trust_level = "Trusted"
