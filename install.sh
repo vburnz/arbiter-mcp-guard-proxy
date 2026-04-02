@@ -20,7 +20,7 @@ main() {
     need_cmd tar
     need_cmd uname
 
-    local _os _arch _libc _target _version _url _checksum_url _tmpdir
+    local _os _arch _libc _target _version _url _checksum_url
 
     _os="$(detect_os)"
     _arch="$(detect_arch)"
@@ -213,10 +213,11 @@ verify_signature() {
                 err "signature verification failed! The binary may have been tampered with."
             fi
         else
-            printf "Note: no signature file found for this release — skipping signature check\n"
+            printf "WARNING: this release is unsigned — no signature file found. Verify provenance manually.\n" >&2
         fi
     else
-        printf "Note: install minisign (https://jedisct1.github.io/minisign/) for release signature verification\n"
+        printf "WARNING: minisign not installed — cannot verify release signature.\n" >&2
+        printf "  Install it: https://jedisct1.github.io/minisign/\n" >&2
     fi
 }
 

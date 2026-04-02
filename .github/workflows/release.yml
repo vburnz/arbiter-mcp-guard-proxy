@@ -167,14 +167,13 @@ jobs:
           cat *.sha256 > checksums-sha256.txt
 
       - name: Sign with minisign
-        continue-on-error: true
         working-directory: artifacts
         env:
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
         run: |
           if [ -z "$MINISIGN_SECRET_KEY" ]; then
-            echo "::warning::MINISIGN_SECRET_KEY not set, skipping signing"
-            exit 0
+            echo "::error::MINISIGN_SECRET_KEY not set — releases must be signed"
+            exit 1
           fi
           # Install minisign (extract only the x86_64 binary)
           curl -sSfL https://github.com/jedisct1/minisign/releases/download/0.11/minisign-0.11-linux.tar.gz \

@@ -81,8 +81,8 @@ jobs:
           grep -q 'checksum mismatch' install.sh
           echo "Checksum verification is mandatory in install path"
 
-      - name: Verify signature is opportunistic (not blocking)
+      - name: Verify signature warns when minisign absent
         run: |
-          # Signature verification should warn, not block, when minisign is absent
-          grep -q 'install minisign' install.sh
-          echo "Signature verification degrades gracefully"
+          # Signature verification should warn, not abort, when minisign is not installed
+          grep -q 'minisign not installed' install.sh
+          echo "Signature verification degrades gracefully with warning"
