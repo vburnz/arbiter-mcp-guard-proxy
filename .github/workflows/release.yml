@@ -2,6 +2,7 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags:
       - "v*"
 
@@ -12,7 +13,47 @@ permissions:
   attestations: write
 
 jobs:
+  tag:
+    if: github.ref == 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate tag
+        id: tag
+        run: |
+          # Auto-increment patch from latest tag, or start at v0.0.1
+          LATEST=$(git tag -l 'v*' --sort=-v:refname | head -1)
+          if [ -z "$LATEST" ]; then
+            TAG="v0.0.1"
+          else
+            # Increment patch version
+            MAJOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f1)
+            MINOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f2)
+            PATCH=$(echo "$LATEST" | sed 's/v//' | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Tagging as $TAG"
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          git tag "$TAG"
+          git push origin "$TAG"
+
   build:
+    needs: [tag]
+    if: always() && (needs.tag.result == 'success' || startsWith(github.ref, 'refs/tags/'))
+    env:
+      RELEASE_TAG: ${{ needs.tag.outputs.tag || github.ref_name }}
+
     strategy:
       matrix:
         include:
@@ -76,7 +117,7 @@ jobs:
         env:
           ARTIFACT_NAME: ${{ matrix.name }}
           BUILD_TARGET: ${{ matrix.target }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ env.RELEASE_TAG }}
         run: |
           STAGING="arbiter-${TAG_NAME}-${BUILD_TARGET}"
           mkdir -p "${STAGING}"
@@ -106,8 +147,11 @@ jobs:
             ${{ matrix.name }}.tar.gz.sha256
 
   release:
-    needs: build
+    needs: [tag, build]
+    if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ needs.tag.outputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -134,9 +178,9 @@ jobs:
           # Sign each tarball and the consolidated checksums
           echo "${MINISIGN_SECRET_KEY}" > /tmp/minisign.key
           for tarball in *.tar.gz; do
-            ./minisign -Sm "$tarball" -s /tmp/minisign.key -t "Arbiter ${{ github.ref_name }}"
+            ./minisign -Sm "$tarball" -s /tmp/minisign.key -t "Arbiter ${{ env.RELEASE_TAG }}"
           done
-          ./minisign -Sm checksums-sha256.txt -s /tmp/minisign.key -t "Arbiter ${{ github.ref_name }}"
+          ./minisign -Sm checksums-sha256.txt -s /tmp/minisign.key -t "Arbiter ${{ env.RELEASE_TAG }}"
           rm -f /tmp/minisign.key
 
       - name: Generate attestations
@@ -147,7 +191,7 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ env.RELEASE_TAG }}
         run: |
           gh release create "${TAG_NAME}" \
             --title "Arbiter ${TAG_NAME}" \
@@ -158,6 +202,8 @@ jobs:
             deploy/arbiter.toml
 
   docker:
+    needs: [tag]
+    if: always() && (needs.tag.result == 'success' || startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
