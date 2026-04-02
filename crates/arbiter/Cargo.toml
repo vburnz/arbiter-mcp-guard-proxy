@@ -41,18 +41,18 @@ secrecy = "0.10"
 subtle = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-arbiter-audit = { path = "../arbiter-audit", version = "0.5.0" }
-arbiter-credential = { path = "../arbiter-credential", version = "0.5.0" }
-arbiter-behavior = { path = "../arbiter-behavior", version = "0.5.0" }
-arbiter-identity = { path = "../arbiter-identity", version = "0.5.0" }
-arbiter-lifecycle = { path = "../arbiter-lifecycle", version = "0.5.0" }
-arbiter-mcp = { path = "../arbiter-mcp", version = "0.5.0" }
-arbiter-metrics = { path = "../arbiter-metrics", version = "0.5.0" }
-arbiter-oauth = { path = "../arbiter-oauth", version = "0.5.0" }
-arbiter-policy = { path = "../arbiter-policy", version = "0.5.0" }
-arbiter-proxy = { path = "../arbiter-proxy", version = "0.5.0" }
-arbiter-session = { path = "../arbiter-session", version = "0.5.0" }
-arbiter-storage = { path = "../arbiter-storage", version = "0.5.0" }
+arbiter-audit = { path = "../arbiter-audit", version = "0.0.11" }
+arbiter-credential = { path = "../arbiter-credential", version = "0.0.11" }
+arbiter-behavior = { path = "../arbiter-behavior", version = "0.0.11" }
+arbiter-identity = { path = "../arbiter-identity", version = "0.0.11" }
+arbiter-lifecycle = { path = "../arbiter-lifecycle", version = "0.0.11" }
+arbiter-mcp = { path = "../arbiter-mcp", version = "0.0.11" }
+arbiter-metrics = { path = "../arbiter-metrics", version = "0.0.11" }
+arbiter-oauth = { path = "../arbiter-oauth", version = "0.0.11" }
+arbiter-policy = { path = "../arbiter-policy", version = "0.0.11" }
+arbiter-proxy = { path = "../arbiter-proxy", version = "0.0.11" }
+arbiter-session = { path = "../arbiter-session", version = "0.0.11" }
+arbiter-storage = { path = "../arbiter-storage", version = "0.0.11" }
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1", features = ["v4"] }
 toml = "0.8"

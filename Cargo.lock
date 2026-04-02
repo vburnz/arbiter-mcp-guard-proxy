@@ -131,7 +131,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "arbiter-audit"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "blake3",
  "chrono",
@@ -149,7 +149,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-behavior"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "arbiter-mcp",
  "chrono",
@@ -166,7 +166,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-cli"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "arbiter-audit",
  "arbiter-identity",
@@ -187,7 +187,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-credential"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "arbiter-session",
  "async-trait",
@@ -209,7 +209,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-identity"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "arbiter-storage",
  "async-trait",
@@ -224,7 +224,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-lifecycle"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "arbiter-audit",
  "arbiter-identity",
@@ -249,7 +249,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-mcp"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "criterion",
  "proptest",
@@ -262,7 +262,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-mcp-firewall"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "anyhow",
  "arbiter-audit",
@@ -302,7 +302,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-metrics"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "prometheus",
  "thiserror 2.0.18",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-oauth"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "anyhow",
  "arbiter-proxy",
@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-policy"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "arbiter-identity",
  "arbiter-mcp",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-proxy"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "anyhow",
  "arbiter-audit",
@@ -372,7 +372,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-session"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "arbiter-storage",
  "async-trait",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-storage"
-version = "0.5.0"
+version = "0.0.11"
 dependencies = [
  "aes-gcm",
  "async-trait",
