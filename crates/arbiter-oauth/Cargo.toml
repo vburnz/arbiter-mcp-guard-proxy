@@ -3,6 +3,11 @@ name = "arbiter-oauth"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "OAuth 2.1 JWT validation middleware for Arbiter proxy"
 
 [dependencies]
@@ -14,7 +19,7 @@ jsonwebtoken = "9"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-arbiter-proxy = { path = "../arbiter-proxy" }
+arbiter-proxy = { path = "../arbiter-proxy", version = "0.5.0" }
 thiserror = "2"
 tokio = { version = "1", features = ["sync", "time"] }
 tracing = "0.1"

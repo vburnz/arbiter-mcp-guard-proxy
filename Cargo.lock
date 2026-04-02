@@ -130,46 +130,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
-name = "arbiter"
-version = "0.5.0"
-dependencies = [
- "anyhow",
- "arbiter-audit",
- "arbiter-behavior",
- "arbiter-credential",
- "arbiter-identity",
- "arbiter-lifecycle",
- "arbiter-mcp",
- "arbiter-metrics",
- "arbiter-oauth",
- "arbiter-policy",
- "arbiter-proxy",
- "arbiter-session",
- "arbiter-storage",
- "axum",
- "bytes",
- "chrono",
- "clap",
- "criterion",
- "flate2",
- "http-body-util",
- "hyper",
- "hyper-rustls",
- "hyper-util",
- "reqwest",
- "secrecy",
- "serde",
- "serde_json",
- "subtle",
- "tempfile",
- "tokio",
- "toml",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "arbiter-audit"
 version = "0.5.0"
 dependencies = [
@@ -298,6 +258,46 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "arbiter-mcp-firewall"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "arbiter-audit",
+ "arbiter-behavior",
+ "arbiter-credential",
+ "arbiter-identity",
+ "arbiter-lifecycle",
+ "arbiter-mcp",
+ "arbiter-metrics",
+ "arbiter-oauth",
+ "arbiter-policy",
+ "arbiter-proxy",
+ "arbiter-session",
+ "arbiter-storage",
+ "axum",
+ "bytes",
+ "chrono",
+ "clap",
+ "criterion",
+ "flate2",
+ "http-body-util",
+ "hyper",
+ "hyper-rustls",
+ "hyper-util",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "subtle",
+ "tempfile",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

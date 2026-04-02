@@ -3,6 +3,11 @@ name = "arbiter-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "CLI for Arbiter agent lifecycle management"
 
 [[bin]]
@@ -10,10 +15,10 @@ name = "arbiter-ctl"
 path = "src/main.rs"
 
 [dependencies]
-arbiter-audit = { path = "../arbiter-audit" }
-arbiter-identity = { path = "../arbiter-identity" }
-arbiter-mcp = { path = "../arbiter-mcp" }
-arbiter-policy = { path = "../arbiter-policy", default-features = false }
+arbiter-audit = { path = "../arbiter-audit", version = "0.5.0" }
+arbiter-identity = { path = "../arbiter-identity", version = "0.5.0" }
+arbiter-mcp = { path = "../arbiter-mcp", version = "0.5.0" }
+arbiter-policy = { path = "../arbiter-policy", version = "0.5.0", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
@@ -25,7 +30,7 @@ toml = "0.8"
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]
-arbiter-lifecycle = { path = "../arbiter-lifecycle" }
+arbiter-lifecycle = { path = "../arbiter-lifecycle", version = "0.5.0" }
 axum = { version = "0.8", features = ["json"] }
 tempfile = "3"
 tokio = { version = "1", features = ["full", "test-util"] }
