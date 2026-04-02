@@ -13,7 +13,7 @@ REPO="cyrenei/arbiter-mcp-firewall"
 INSTALL_DIR="${ARBITER_INSTALL_DIR:-$HOME/.arbiter/bin}"
 
 # Minisign public key for signature verification.
-MINISIGN_PUBKEY="RWSalEaWCmaMENQjO+bgU9PDR5h9PSxqCL8N8m3AENrQRIpDXo6RdT+v"
+MINISIGN_PUBKEY="RWSvUzuT3bMn1BIHBaqPJNRl7xogZUHrz+9zDymIZaewqWvZvJPI+3QR"
 
 main() {
     need_cmd curl

@@ -16,8 +16,9 @@ integration-testing/
 .env
 .env.*
 
-# Minisign secret key (public key is committed; secret key is a GitHub Actions secret)
-.minisign/minisign.key
+# Minisign secret keys (public key is committed; secret key is a GitHub Actions secret)
+.minisign/*.key
+arbiter.key
 
 # IDE / tool state
 .idea/
