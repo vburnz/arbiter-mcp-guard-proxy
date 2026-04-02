@@ -1,7 +1,7 @@
 use proptest::prelude::*;
 
 use arbiter_behavior::{
-    classify_operation, AnomalyConfig, AnomalyDetector, AnomalyResponse, OperationType,
+    AnomalyConfig, AnomalyDetector, AnomalyResponse, OperationType, classify_operation,
 };
 
 /// Strategy for MCP method names.

@@ -133,10 +133,10 @@ pub async fn handle_request(
                 .observe_request_duration(request_start.elapsed().as_secs_f64());
 
             let entry = capture.finalize(Some(status));
-            if let Some(sink) = &state.audit_sink {
-                if let Err(e) = sink.write(&entry).await {
-                    tracing::error!(error = %e, "failed to write audit entry");
-                }
+            if let Some(sink) = &state.audit_sink
+                && let Err(e) = sink.write(&entry).await
+            {
+                tracing::error!(error = %e, "failed to write audit entry");
             }
 
             return Ok(*rejection);
@@ -165,7 +165,8 @@ pub async fn handle_request(
 
     // Forward to upstream and time it.
     let upstream_start = Instant::now();
-    let response = match state.client.request(upstream_req).await {
+
+    match state.client.request(upstream_req).await {
         Ok(resp) => {
             state
                 .metrics
@@ -179,10 +180,10 @@ pub async fn handle_request(
                 .observe_request_duration(request_start.elapsed().as_secs_f64());
 
             let entry = capture.finalize(Some(status));
-            if let Some(sink) = &state.audit_sink {
-                if let Err(e) = sink.write(&entry).await {
-                    tracing::error!(error = %e, "failed to write audit entry");
-                }
+            if let Some(sink) = &state.audit_sink
+                && let Err(e) = sink.write(&entry).await
+            {
+                tracing::error!(error = %e, "failed to write audit entry");
             }
 
             Ok(Response::from_parts(parts, Full::new(body_bytes)))
@@ -198,10 +199,10 @@ pub async fn handle_request(
                 .observe_request_duration(request_start.elapsed().as_secs_f64());
 
             let entry = capture.finalize(None);
-            if let Some(sink) = &state.audit_sink {
-                if let Err(e) = sink.write(&entry).await {
-                    tracing::error!(error = %e, "failed to write audit entry");
-                }
+            if let Some(sink) = &state.audit_sink
+                && let Err(e) = sink.write(&entry).await
+            {
+                tracing::error!(error = %e, "failed to write audit entry");
             }
 
             Ok(Response::builder()
@@ -209,9 +210,7 @@ pub async fn handle_request(
                 .body(Full::new(Bytes::from("Bad Gateway")))
                 .expect("building static response cannot fail"))
         }
-    };
-
-    response
+    }
 }
 
 /// Build an [`AuditSink`] and [`RedactionConfig`] from the proxy's audit config.

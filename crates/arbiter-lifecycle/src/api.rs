@@ -4,10 +4,10 @@ use arbiter_identity::{AgentRegistry, TrustLevel};
 use arbiter_mcp::context::McpRequest;
 use arbiter_policy::{EvalContext, PolicyTrace};
 use arbiter_session::{CreateSessionRequest, DataSensitivity};
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use axum::Json;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -505,21 +505,21 @@ pub async fn issue_agent_token(
     }
 
     let mut config = state.token_config.clone();
-    if let Some(Json(req)) = body {
-        if let Some(expiry) = req.expiry_seconds {
-            // P4: Reject non-positive expiry to prevent creating immediately-invalid tokens.
-            // (RT-003 F-09: token expiry accepts negative values)
-            if expiry <= 0 {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse {
-                        error: "expiry_seconds must be positive".into(),
-                    }),
-                )
-                    .into_response();
-            }
-            config.expiry_seconds = expiry;
+    if let Some(Json(req)) = body
+        && let Some(expiry) = req.expiry_seconds
+    {
+        // P4: Reject non-positive expiry to prevent creating immediately-invalid tokens.
+        // (RT-003 F-09: token expiry accepts negative values)
+        if expiry <= 0 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "expiry_seconds must be positive".into(),
+                }),
+            )
+                .into_response();
         }
+        config.expiry_seconds = expiry;
     }
 
     match issue_token(agent.id, &agent.owner, &config) {
@@ -620,21 +620,21 @@ pub async fn create_session(
             .into_response();
     }
 
-    if let Some(expires_at) = agent.expires_at {
-        if expires_at < Utc::now() {
-            tracing::warn!(
-                agent_id = %req.agent_id,
-                expires_at = %expires_at,
-                "session creation denied: agent has expired"
-            );
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: format!("agent {} has expired", req.agent_id),
-                }),
-            )
-                .into_response();
-        }
+    if let Some(expires_at) = agent.expires_at
+        && expires_at < Utc::now()
+    {
+        tracing::warn!(
+            agent_id = %req.agent_id,
+            expires_at = %expires_at,
+            "session creation denied: agent has expired"
+        );
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: format!("agent {} has expired", req.agent_id),
+            }),
+        )
+            .into_response();
     }
 
     // P0: Per-agent session cap to prevent session multiplication attacks.
@@ -1370,6 +1370,9 @@ mod tests {
 
     #[test]
     fn sanitize_for_log_preserves_normal_text() {
-        assert_eq!(sanitize_for_log("read configuration files"), "read configuration files");
+        assert_eq!(
+            sanitize_for_log("read configuration files"),
+            "read configuration files"
+        );
     }
 }

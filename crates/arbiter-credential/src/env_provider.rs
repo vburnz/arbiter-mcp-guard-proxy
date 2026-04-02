@@ -49,12 +49,10 @@ impl CredentialProvider for EnvProvider {
             )));
         }
 
-        env::var(reference)
-            .map(SecretString::from)
-            .map_err(|e| {
-                warn!(reference, error = %e, "env var not found");
-                CredentialError::NotFound(format!("env var {reference}: {e}"))
-            })
+        env::var(reference).map(SecretString::from).map_err(|e| {
+            warn!(reference, error = %e, "env var not found");
+            CredentialError::NotFound(format!("env var {reference}: {e}"))
+        })
     }
 
     async fn list_refs(&self) -> Result<Vec<CredentialRef>, CredentialError> {
@@ -80,13 +78,14 @@ mod tests {
     #[tokio::test]
     async fn resolves_env_var() {
         let key = "ARBITER_CRED_TEST_RESOLVE_42";
-        env::set_var(key, "secret-value");
+        // SAFETY: test-only, no concurrent env access
+        unsafe { env::set_var(key, "secret-value") };
 
         let provider = EnvProvider::new();
         let value = provider.resolve(key).await.unwrap();
         assert_eq!(value.expose_secret(), "secret-value");
 
-        env::remove_var(key);
+        unsafe { env::remove_var(key) };
     }
 
     #[tokio::test]
@@ -104,9 +103,12 @@ mod tests {
         let key1 = "ARBITER_CRED_LIST_TEST_A";
         let key2 = "ARBITER_CRED_LIST_TEST_B";
         let key3 = "UNRELATED_VAR_LIST_TEST";
-        env::set_var(key1, "a");
-        env::set_var(key2, "b");
-        env::set_var(key3, "c");
+        // SAFETY: test-only, no concurrent env access
+        unsafe {
+            env::set_var(key1, "a");
+            env::set_var(key2, "b");
+            env::set_var(key3, "c");
+        }
 
         let provider = EnvProvider::new();
         let refs = provider.list_refs().await.unwrap();
@@ -117,21 +119,24 @@ mod tests {
         assert!(!names.contains(&key3));
         assert!(refs.iter().all(|r| r.provider == "env"));
 
-        env::remove_var(key1);
-        env::remove_var(key2);
-        env::remove_var(key3);
+        unsafe {
+            env::remove_var(key1);
+            env::remove_var(key2);
+            env::remove_var(key3);
+        }
     }
 
     #[tokio::test]
     async fn custom_prefix() {
         let key = "MY_PREFIX_KEY_1";
-        env::set_var(key, "value");
+        // SAFETY: test-only, no concurrent env access
+        unsafe { env::set_var(key, "value") };
 
         let provider = EnvProvider::with_prefix("MY_PREFIX_");
         let refs = provider.list_refs().await.unwrap();
         let names: Vec<_> = refs.iter().map(|r| r.name.as_str()).collect();
         assert!(names.contains(&key));
 
-        env::remove_var(key);
+        unsafe { env::remove_var(key) };
     }
 }

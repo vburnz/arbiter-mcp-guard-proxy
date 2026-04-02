@@ -21,7 +21,7 @@ use arbiter_audit::{AuditCapture, AuditSink, CompiledRedaction, RedactionConfig}
 use arbiter_behavior::{AnomalyConfig, AnomalyDetector};
 use arbiter_credential::CredentialProvider;
 use arbiter_identity::AnyRegistry;
-use arbiter_mcp::parser::{parse_mcp_body, ParseResult};
+use arbiter_mcp::parser::{ParseResult, parse_mcp_body};
 use arbiter_metrics::ArbiterMetrics;
 use arbiter_policy::{PolicyConfig, PolicyTrace};
 use arbiter_proxy::middleware::MiddlewareChain;
@@ -223,18 +223,17 @@ pub async fn handle_request(
     // ── Stage 0.5: Audit health gate ────────────────────────────────
     // Deny requests when audit is degraded (if configured).
     // Prevents attackers from operating without audit trail by causing audit failures.
-    if state.require_audit_healthy {
-        if let Some(ref sink) = state.audit_sink {
-            if sink.is_degraded() {
-                return Ok(Response::builder()
+    if state.require_audit_healthy
+        && let Some(ref sink) = state.audit_sink
+        && sink.is_degraded()
+    {
+        return Ok(Response::builder()
                     .status(StatusCode::SERVICE_UNAVAILABLE)
                     .header("content-type", "application/json")
                     .body(Full::new(Bytes::from(
                         r#"{"error":{"code":"AUDIT_REQUIRED","message":"Service unavailable: audit system is degraded"}}"#,
                     )))
                     .expect("static response"));
-            }
-        }
     }
 
     // ── Stage 1: Tracing ────────────────────────────────────────────
@@ -248,7 +247,8 @@ pub async fn handle_request(
     // (timing started above, recorded at the end)
 
     // ── Stage 3: Audit (begin capture) ──────────────────────────────
-    let mut capture = AuditCapture::begin_with_id_compiled(request_id, Arc::clone(&state.compiled_redaction));
+    let mut capture =
+        AuditCapture::begin_with_id_compiled(request_id, Arc::clone(&state.compiled_redaction));
 
     // Extract identity headers for audit context.
     let agent_id_header = req
@@ -375,10 +375,10 @@ pub async fn handle_request(
             capture.set_tool_called(&tool_name_for_audit);
         }
         // Record arguments from the first request for backward compatibility.
-        if let Some(first) = ctx.requests.first() {
-            if let Some(ref args) = first.arguments {
-                capture.set_arguments(args.clone());
-            }
+        if let Some(first) = ctx.requests.first()
+            && let Some(ref args) = first.arguments
+        {
+            capture.set_arguments(args.clone());
         }
         tracing::debug!(
             requests = ctx.requests.len(),
@@ -389,22 +389,21 @@ pub async fn handle_request(
     }
 
     // ── Stage 6.5: Enforcement gates ──────────────────────────────────
-    if state.require_session {
-        if let ParseResult::Mcp(_) = &mcp_context {
-            if session_id_header.is_empty() {
-                tracing::warn!("MCP request without session header, denied");
-                return Ok(deny(
-                    &state,
-                    capture,
-                    request_id,
-                    request_start,
-                    StatusCode::FORBIDDEN,
-                    None,
-                    ArbiterError::session_required(),
-                )
-                .await);
-            }
-        }
+    if state.require_session
+        && let ParseResult::Mcp(_) = &mcp_context
+        && session_id_header.is_empty()
+    {
+        tracing::warn!("MCP request without session header, denied");
+        return Ok(deny(
+            &state,
+            capture,
+            request_id,
+            request_start,
+            StatusCode::FORBIDDEN,
+            None,
+            ArbiterError::session_required(),
+        )
+        .await);
     }
 
     // ── Stage 6.5a: Non-POST method gate ────────────────────────────
@@ -453,22 +452,21 @@ pub async fn handle_request(
         }
     }
 
-    if state.strict_mcp {
-        if let ParseResult::NonMcp = &mcp_context {
-            if method == "POST" {
-                tracing::warn!("non-MCP POST body rejected in strict mode");
-                return Ok(deny(
-                    &state,
-                    capture,
-                    request_id,
-                    request_start,
-                    StatusCode::FORBIDDEN,
-                    None,
-                    ArbiterError::non_mcp_rejected(),
-                )
-                .await);
-            }
-        }
+    if state.strict_mcp
+        && let ParseResult::NonMcp = &mcp_context
+        && method == "POST"
+    {
+        tracing::warn!("non-MCP POST body rejected in strict mode");
+        return Ok(deny(
+            &state,
+            capture,
+            request_id,
+            request_start,
+            StatusCode::FORBIDDEN,
+            None,
+            ArbiterError::non_mcp_rejected(),
+        )
+        .await);
     }
 
     // ── Shared preconditions for stages 7-9 ────────────────────────
@@ -511,7 +509,7 @@ pub async fn handle_request(
     // Fetch the session ONCE and reuse throughout the pipeline.
     // Previously queried the session store 3 times (binding, delegation, tool auth),
     // creating a TOCTOU window where session state could change between checks.
-    let fetched_session = if let (Some(session_id), ParseResult::Mcp(ref ctx)) =
+    let fetched_session = if let (Some(session_id), ParseResult::Mcp(ctx)) =
         (parsed_session_id, &mcp_context)
     {
         // Verify session-agent binding.
@@ -660,7 +658,7 @@ pub async fn handle_request(
     // `validate_session_tools` already incremented the store's copy.
     // Adjust by the batch size to report accurate remaining calls.
     let calls_consumed_this_request = match &mcp_context {
-        ParseResult::Mcp(ref ctx) => ctx.requests.len() as u64,
+        ParseResult::Mcp(ctx) => ctx.requests.len() as u64,
         _ => 0,
     };
     let mut session_warnings: Vec<(String, String)> = Vec::new();
@@ -727,10 +725,11 @@ pub async fn handle_request(
     // `require_session = false` bypassed ALL authorization (policy + behavior).
     // When NO policies are loaded, MCP traffic is now DENIED rather than
     // silently allowed. Deny-by-default means "if I don't know what to do, deny."
-    if let ParseResult::Mcp(_) = mcp_context {
-        if !has_policies {
-            tracing::warn!("no policies loaded, denying MCP traffic (deny-by-default)");
-            return Ok(deny(
+    if let ParseResult::Mcp(_) = mcp_context
+        && !has_policies
+    {
+        tracing::warn!("no policies loaded, denying MCP traffic (deny-by-default)");
+        return Ok(deny(
                 &state,
                 capture,
                 request_id,
@@ -747,9 +746,8 @@ pub async fn handle_request(
                 },
             )
             .await);
-        }
     }
-    if let (true, ParseResult::Mcp(ref ctx)) = (has_policies, &mcp_context) {
+    if let (true, ParseResult::Mcp(ctx)) = (has_policies, &mcp_context) {
         let policy_config = (*policy_snapshot).as_ref().unwrap(); // safe: has_policies
 
         let eval_ctx = if let Some(ref session) = fetched_session {
@@ -822,97 +820,92 @@ pub async fn handle_request(
     // Previously this called state.session_store.get(session_id) again, creating a
     // TOCTOU window inconsistent with the single-fetch pattern established in Stage 7.
     // (RT-003 F-11: behavioral anomaly re-fetches session)
-    if let (ParseResult::Mcp(ref ctx), Some(ref session)) = (&mcp_context, &fetched_session) {
-        {
-            let (verdict, flags) = detect_behavioral_anomalies(
-                &state.anomaly_detector,
-                &session.declared_intent,
-                &ctx.requests,
-            );
-            if !flags.is_empty() {
-                state.metrics.record_anomaly();
-                capture.set_anomaly_flags(flags.clone());
+    if let (ParseResult::Mcp(ctx), Some(session)) = (&mcp_context, &fetched_session) {
+        let (verdict, flags) = detect_behavioral_anomalies(
+            &state.anomaly_detector,
+            &session.declared_intent,
+            &ctx.requests,
+        );
+        if !flags.is_empty() {
+            state.metrics.record_anomaly();
+            capture.set_anomaly_flags(flags.clone());
 
-                // Trust degradation feedback loop with time-based decay.
-                // Accumulate anomaly flags per agent. Counter halves every hour
-                // since last increment, preventing stale flags from months ago
-                // from triggering demotion. AIMD-inspired: fast demotion, slow recovery.
-                const ANOMALY_DECAY_INTERVAL: std::time::Duration =
-                    std::time::Duration::from_secs(3600);
-                if let Ok(agent_uuid) = agent_id_header.parse::<uuid::Uuid>() {
-                    let should_demote = {
-                        let mut counts = state
-                            .anomaly_counts
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner());
-                        let now = std::time::Instant::now();
-                        let (count, last_time) = counts
-                            .entry(agent_uuid)
-                            .or_insert((0, now));
-                        // Time-based decay: halve the counter for each decay interval elapsed.
-                        let elapsed = now.duration_since(*last_time);
-                        let decay_periods = elapsed.as_secs() / ANOMALY_DECAY_INTERVAL.as_secs();
-                        if decay_periods > 0 {
-                            *count = count.checked_shr(decay_periods as u32).unwrap_or(0);
-                        }
-                        *count += flags.len() as u32;
-                        *last_time = now;
-                        *count >= state.trust_degradation_threshold
-                    };
-                    if should_demote {
-                        use arbiter_identity::AgentRegistry;
-                        if let Ok(agent) = state.registry.get_agent(agent_uuid).await {
-                            let demoted = match agent.trust_level {
-                                arbiter_identity::TrustLevel::Trusted => {
-                                    arbiter_identity::TrustLevel::Verified
-                                }
-                                arbiter_identity::TrustLevel::Verified => {
-                                    arbiter_identity::TrustLevel::Basic
-                                }
-                                arbiter_identity::TrustLevel::Basic => {
-                                    arbiter_identity::TrustLevel::Untrusted
-                                }
-                                arbiter_identity::TrustLevel::Untrusted => {
-                                    arbiter_identity::TrustLevel::Untrusted
-                                }
-                            };
-                            if demoted != agent.trust_level {
-                                tracing::warn!(
-                                    agent_id = %agent_uuid,
-                                    from = ?agent.trust_level,
-                                    to = ?demoted,
-                                    "trust level demoted due to accumulated behavioral anomalies"
-                                );
-                                let _ =
-                                    state.registry.update_trust_level(agent_uuid, demoted).await;
-                                // Reset counter after demotion.
-                                let mut counts = state
-                                    .anomaly_counts
-                                    .lock()
-                                    .unwrap_or_else(|e| e.into_inner());
-                                counts.insert(agent_uuid, (0, std::time::Instant::now()));
+            // Trust degradation feedback loop with time-based decay.
+            // Accumulate anomaly flags per agent. Counter halves every hour
+            // since last increment, preventing stale flags from months ago
+            // from triggering demotion. AIMD-inspired: fast demotion, slow recovery.
+            const ANOMALY_DECAY_INTERVAL: std::time::Duration =
+                std::time::Duration::from_secs(3600);
+            if let Ok(agent_uuid) = agent_id_header.parse::<uuid::Uuid>() {
+                let should_demote = {
+                    let mut counts = state
+                        .anomaly_counts
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    let now = std::time::Instant::now();
+                    let (count, last_time) = counts.entry(agent_uuid).or_insert((0, now));
+                    // Time-based decay: halve the counter for each decay interval elapsed.
+                    let elapsed = now.duration_since(*last_time);
+                    let decay_periods = elapsed.as_secs() / ANOMALY_DECAY_INTERVAL.as_secs();
+                    if decay_periods > 0 {
+                        *count = count.checked_shr(decay_periods as u32).unwrap_or(0);
+                    }
+                    *count += flags.len() as u32;
+                    *last_time = now;
+                    *count >= state.trust_degradation_threshold
+                };
+                if should_demote {
+                    use arbiter_identity::AgentRegistry;
+                    if let Ok(agent) = state.registry.get_agent(agent_uuid).await {
+                        let demoted = match agent.trust_level {
+                            arbiter_identity::TrustLevel::Trusted => {
+                                arbiter_identity::TrustLevel::Verified
                             }
+                            arbiter_identity::TrustLevel::Verified => {
+                                arbiter_identity::TrustLevel::Basic
+                            }
+                            arbiter_identity::TrustLevel::Basic => {
+                                arbiter_identity::TrustLevel::Untrusted
+                            }
+                            arbiter_identity::TrustLevel::Untrusted => {
+                                arbiter_identity::TrustLevel::Untrusted
+                            }
+                        };
+                        if demoted != agent.trust_level {
+                            tracing::warn!(
+                                agent_id = %agent_uuid,
+                                from = ?agent.trust_level,
+                                to = ?demoted,
+                                "trust level demoted due to accumulated behavioral anomalies"
+                            );
+                            let _ = state.registry.update_trust_level(agent_uuid, demoted).await;
+                            // Reset counter after demotion.
+                            let mut counts = state
+                                .anomaly_counts
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            counts.insert(agent_uuid, (0, std::time::Instant::now()));
                         }
                     }
                 }
             }
-            if let StageVerdict::Deny {
+        }
+        if let StageVerdict::Deny {
+            status,
+            policy_matched,
+            error,
+        } = verdict
+        {
+            return Ok(deny(
+                &state,
+                capture,
+                request_id,
+                request_start,
                 status,
-                policy_matched,
+                policy_matched.as_deref(),
                 error,
-            } = verdict
-            {
-                return Ok(deny(
-                    &state,
-                    capture,
-                    request_id,
-                    request_start,
-                    status,
-                    policy_matched.as_deref(),
-                    error,
-                )
-                .await);
-            }
+            )
+            .await);
         }
     }
 
@@ -926,7 +919,9 @@ pub async fn handle_request(
         let body_str = match String::from_utf8(body_bytes.to_vec()) {
             Ok(s) => s,
             Err(_) => {
-                tracing::warn!("request body contains invalid UTF-8 with credential injection active; rejecting");
+                tracing::warn!(
+                    "request body contains invalid UTF-8 with credential injection active; rejecting"
+                );
                 return Ok(deny(
                     &state,
                     capture,
@@ -1141,34 +1136,34 @@ pub async fn handle_request(
                 // Defense-in-depth: even though we strip Accept-Encoding from
                 // outbound requests, a malicious upstream could ignore that and
                 // return compressed content to bypass credential scrubbing.
-                if !injected_secrets.is_empty() {
-                    if let Some(encoding) = resp_parts.headers.get(hyper::header::CONTENT_ENCODING)
-                    {
-                        let encoding_str = encoding.to_str().unwrap_or("");
-                        let decompressed = decompress_body(&resp_bytes, encoding_str, state.max_response_body_bytes);
-                        match decompressed {
-                            Ok(bytes) => {
-                                tracing::info!(
-                                    encoding = encoding_str,
-                                    "decompressed response body before credential scrubbing"
-                                );
-                                resp_bytes = bytes;
-                                // Remove Content-Encoding since we've decompressed.
-                                resp_parts.headers.remove(hyper::header::CONTENT_ENCODING);
-                            }
-                            Err(e) => {
-                                // Can't decompress: reject to prevent scrub bypass.
-                                tracing::warn!(
-                                    encoding = encoding_str,
-                                    error = %e,
-                                    "cannot decompress response with active credential injection; \
-                                     rejecting to prevent scrub bypass"
-                                );
-                                resp_bytes = Bytes::from(
-                                    "{\"error\": \"upstream response uses unsupported content encoding\"}",
-                                );
-                                resp_parts.status = hyper::StatusCode::BAD_GATEWAY;
-                            }
+                if !injected_secrets.is_empty()
+                    && let Some(encoding) = resp_parts.headers.get(hyper::header::CONTENT_ENCODING)
+                {
+                    let encoding_str = encoding.to_str().unwrap_or("");
+                    let decompressed =
+                        decompress_body(&resp_bytes, encoding_str, state.max_response_body_bytes);
+                    match decompressed {
+                        Ok(bytes) => {
+                            tracing::info!(
+                                encoding = encoding_str,
+                                "decompressed response body before credential scrubbing"
+                            );
+                            resp_bytes = bytes;
+                            // Remove Content-Encoding since we've decompressed.
+                            resp_parts.headers.remove(hyper::header::CONTENT_ENCODING);
+                        }
+                        Err(e) => {
+                            // Can't decompress: reject to prevent scrub bypass.
+                            tracing::warn!(
+                                encoding = encoding_str,
+                                error = %e,
+                                "cannot decompress response with active credential injection; \
+                                 rejecting to prevent scrub bypass"
+                            );
+                            resp_bytes = Bytes::from(
+                                "{\"error\": \"upstream response uses unsupported content encoding\"}",
+                            );
+                            resp_parts.status = hyper::StatusCode::BAD_GATEWAY;
                         }
                     }
                 }
@@ -1190,7 +1185,9 @@ pub async fn handle_request(
                             resp_bytes = Bytes::from(scrubbed);
                         }
                         Err(_) => {
-                            tracing::warn!("upstream response contains invalid UTF-8 with active credential injection; rejecting to prevent scrub bypass");
+                            tracing::warn!(
+                                "upstream response contains invalid UTF-8 with active credential injection; rejecting to prevent scrub bypass"
+                            );
                             resp_bytes = Bytes::from(
                                 "{\"error\": \"upstream response contained invalid encoding\"}",
                             );
@@ -1203,74 +1200,76 @@ pub async fn handle_request(
                 // Scan the response body for sensitive data patterns and enforce
                 // the session's data_sensitivity_ceiling. This prevents upstream
                 // services from returning data that exceeds the session's authorization.
-                if let Some(session_id) = parsed_session_id {
-                    if let Ok(session) = state.session_store.get(session_id).await {
-                        // Use strict UTF-8 for data classification, consistent with
-                        // credential scrubbing (Stage 10.5). Previously used from_utf8_lossy,
-                        // which could allow a malicious upstream to hide sensitive data
-                        // in non-UTF-8 sequences that disrupt pattern matching.
-                        let resp_str = match String::from_utf8(resp_bytes.to_vec()) {
-                            Ok(s) => s,
-                            Err(_) => {
-                                tracing::warn!(
-                                    "response contains non-UTF-8 bytes; \
+                if let Some(session_id) = parsed_session_id
+                    && let Ok(session) = state.session_store.get(session_id).await
+                {
+                    // Use strict UTF-8 for data classification, consistent with
+                    // credential scrubbing (Stage 10.5). Previously used from_utf8_lossy,
+                    // which could allow a malicious upstream to hide sensitive data
+                    // in non-UTF-8 sequences that disrupt pattern matching.
+                    let resp_str = match String::from_utf8(resp_bytes.to_vec()) {
+                        Ok(s) => s,
+                        Err(_) => {
+                            tracing::warn!(
+                                "response contains non-UTF-8 bytes; \
                                      skipping data classification (defense-in-depth only)"
-                                );
-                                String::new() // skip classification for non-UTF-8 responses
-                            }
-                        };
-                        let findings =
-                            arbiter_credential::response_classifier::scan_response(&resp_str);
-                        if !findings.is_empty() {
-                            let ceiling = session.data_sensitivity_ceiling;
-                            let mut finding_descriptions: Vec<String> = Vec::new();
-                            let mut max_detected: Option<arbiter_session::DataSensitivity> = None;
+                            );
+                            String::new() // skip classification for non-UTF-8 responses
+                        }
+                    };
+                    let findings =
+                        arbiter_credential::response_classifier::scan_response(&resp_str);
+                    if !findings.is_empty() {
+                        let ceiling = session.data_sensitivity_ceiling;
+                        let mut finding_descriptions: Vec<String> = Vec::new();
+                        let mut max_detected: Option<arbiter_session::DataSensitivity> = None;
 
-                            for finding in &findings {
-                                let mapped = match finding.sensitivity {
-                                    arbiter_credential::DetectedSensitivity::Internal => {
-                                        arbiter_session::DataSensitivity::Internal
-                                    }
-                                    arbiter_credential::DetectedSensitivity::Confidential => {
-                                        arbiter_session::DataSensitivity::Confidential
-                                    }
-                                    arbiter_credential::DetectedSensitivity::Restricted => {
-                                        arbiter_session::DataSensitivity::Restricted
-                                    }
-                                };
-                                finding_descriptions.push(format!(
-                                    "{:?}: {}",
-                                    finding.sensitivity, finding.pattern_name
-                                ));
-                                max_detected = Some(
-                                    max_detected.map_or(mapped, |prev: arbiter_session::DataSensitivity| prev.max(mapped)),
-                                );
-                            }
+                        for finding in &findings {
+                            let mapped = match finding.sensitivity {
+                                arbiter_credential::DetectedSensitivity::Internal => {
+                                    arbiter_session::DataSensitivity::Internal
+                                }
+                                arbiter_credential::DetectedSensitivity::Confidential => {
+                                    arbiter_session::DataSensitivity::Confidential
+                                }
+                                arbiter_credential::DetectedSensitivity::Restricted => {
+                                    arbiter_session::DataSensitivity::Restricted
+                                }
+                            };
+                            finding_descriptions.push(format!(
+                                "{:?}: {}",
+                                finding.sensitivity, finding.pattern_name
+                            ));
+                            max_detected = Some(
+                                max_detected
+                                    .map_or(mapped, |prev: arbiter_session::DataSensitivity| {
+                                        prev.max(mapped)
+                                    }),
+                            );
+                        }
 
-                            if let Some(detected) = max_detected {
-                                if detected > ceiling {
-                                    tracing::warn!(
-                                        %session_id,
-                                        ?ceiling,
-                                        ?detected,
-                                        findings = ?finding_descriptions,
-                                        "response contains data exceeding session sensitivity ceiling"
+                        if let Some(detected) = max_detected {
+                            if detected > ceiling {
+                                tracing::warn!(
+                                    %session_id,
+                                    ?ceiling,
+                                    ?detected,
+                                    findings = ?finding_descriptions,
+                                    "response contains data exceeding session sensitivity ceiling"
+                                );
+                                capture.add_inspection_findings(finding_descriptions.clone());
+
+                                // Restricted data in a non-Restricted session: block entirely
+                                if detected == arbiter_session::DataSensitivity::Restricted
+                                    && ceiling != arbiter_session::DataSensitivity::Restricted
+                                {
+                                    state.metrics.record_request("deny");
+                                    state.metrics.observe_request_duration(
+                                        request_start.elapsed().as_secs_f64(),
                                     );
-                                    capture.add_inspection_findings(finding_descriptions.clone());
-
-                                    // Restricted data in a non-Restricted session: block entirely
-                                    if detected == arbiter_session::DataSensitivity::Restricted
-                                        && ceiling != arbiter_session::DataSensitivity::Restricted
-                                    {
-                                        state.metrics.record_request("deny");
-                                        state
-                                            .metrics
-                                            .observe_request_duration(
-                                                request_start.elapsed().as_secs_f64(),
-                                            );
-                                        let entry = capture.finalize(Some(status));
-                                        write_audit(&state, &entry).await;
-                                        return Ok(error_response(
+                                    let entry = capture.finalize(Some(status));
+                                    write_audit(&state, &entry).await;
+                                    return Ok(error_response(
                                             StatusCode::BAD_GATEWAY,
                                             &ArbiterError {
                                                 code: ErrorCode::UpstreamError,
@@ -1287,12 +1286,11 @@ pub async fn handle_request(
                                                 policy_trace: None,
                                             },
                                         ));
-                                    }
-                                    // Non-Restricted findings that exceed ceiling: log + audit but forward
-                                } else {
-                                    // Findings are within the ceiling — still record them for audit
-                                    capture.add_inspection_findings(finding_descriptions);
                                 }
+                                // Non-Restricted findings that exceed ceiling: log + audit but forward
+                            } else {
+                                // Findings are within the ceiling — still record them for audit
+                                capture.add_inspection_findings(finding_descriptions);
                             }
                         }
                     }
@@ -1311,12 +1309,12 @@ pub async fn handle_request(
                 // Previously, x-arbiter-audit-degraded with consecutive_failures count was sent to
                 // clients, allowing attackers to monitor DoS progress against the audit system.
                 // Audit degradation status is now only visible via the /health endpoint and server logs.
-                if let Some(ref sink) = state.audit_sink {
-                    if sink.is_degraded() {
-                        tracing::warn!(
-                            "audit sink degraded; response forwarded without header disclosure"
-                        );
-                    }
+                if let Some(ref sink) = state.audit_sink
+                    && sink.is_degraded()
+                {
+                    tracing::warn!(
+                        "audit sink degraded; response forwarded without header disclosure"
+                    );
                 }
 
                 // Strip upstream X-Arbiter-* headers.
@@ -1618,7 +1616,9 @@ fn decompress_body(body: &Bytes, encoding: &str, max_bytes: usize) -> Result<Byt
         let mut decompressed = Vec::with_capacity(max_bytes.min(1 << 20));
         let mut buf = [0u8; 8192];
         loop {
-            let n = reader.read(&mut buf).map_err(|e| format!("decompression failed: {e}"))?;
+            let n = reader
+                .read(&mut buf)
+                .map_err(|e| format!("decompression failed: {e}"))?;
             if n == 0 {
                 break;
             }
@@ -1707,19 +1707,19 @@ async fn deny(
 }
 
 // Stage functions are in the `stages` module.
+pub use crate::stages::StageVerdict;
 pub use crate::stages::anomaly_detection::detect_behavioral_anomalies;
 pub use crate::stages::policy_evaluation::{
     build_eval_context, build_eval_context_from_header, evaluate_mcp_policies,
 };
 pub use crate::stages::session_enforcement::validate_session_tools;
-pub use crate::stages::StageVerdict;
 
 /// Write an audit entry to the sink.
 async fn write_audit(state: &ArbiterState, entry: &arbiter_audit::AuditEntry) {
-    if let Some(sink) = &state.audit_sink {
-        if let Err(e) = sink.write(entry).await {
-            tracing::error!(error = %e, "failed to write audit entry");
-        }
+    if let Some(sink) = &state.audit_sink
+        && let Err(e) = sink.write(entry).await
+    {
+        tracing::error!(error = %e, "failed to write audit entry");
     }
 }
 
@@ -1773,8 +1773,8 @@ mod tests {
 
     #[test]
     fn decompress_gzip_valid() {
-        use flate2::write::GzEncoder;
         use flate2::Compression;
+        use flate2::write::GzEncoder;
         use std::io::Write;
 
         let original = b"the quick brown fox jumps over the lazy dog";
@@ -1788,8 +1788,8 @@ mod tests {
 
     #[test]
     fn decompress_deflate_valid() {
-        use flate2::write::DeflateEncoder;
         use flate2::Compression;
+        use flate2::write::DeflateEncoder;
         use std::io::Write;
 
         let original = b"deflate test payload";
@@ -1811,8 +1811,8 @@ mod tests {
 
     #[test]
     fn decompress_gzip_bomb_rejected() {
-        use flate2::write::GzEncoder;
         use flate2::Compression;
+        use flate2::write::GzEncoder;
         use std::io::Write;
 
         // Create a payload that compresses well: 100KB of zeros.
@@ -1826,7 +1826,10 @@ mod tests {
         assert!(compressed.len() < 1000, "compressed should be small");
 
         let result = decompress_body(&Bytes::from(compressed), "gzip", 1024);
-        assert!(result.is_err(), "should reject decompression exceeding limit");
+        assert!(
+            result.is_err(),
+            "should reject decompression exceeding limit"
+        );
         assert!(
             result.unwrap_err().contains("compression bomb"),
             "error message should mention compression bomb"
@@ -1835,8 +1838,8 @@ mod tests {
 
     #[test]
     fn decompress_within_limit_succeeds() {
-        use flate2::write::GzEncoder;
         use flate2::Compression;
+        use flate2::write::GzEncoder;
         use std::io::Write;
 
         let original = vec![0u8; 500];
@@ -1851,8 +1854,8 @@ mod tests {
 
     #[test]
     fn decompress_exact_limit_succeeds() {
-        use flate2::write::GzEncoder;
         use flate2::Compression;
+        use flate2::write::GzEncoder;
         use std::io::Write;
 
         let original = vec![42u8; 1024];

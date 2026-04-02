@@ -577,17 +577,17 @@ impl ArbiterConfig {
     /// deserialized from the config file. This keeps secrets out of TOML
     /// files that might be committed to version control.
     pub fn apply_env_overrides(&mut self) {
-        if let Ok(key) = std::env::var("ARBITER_ADMIN_API_KEY") {
-            if !key.is_empty() {
-                tracing::info!("admin API key loaded from ARBITER_ADMIN_API_KEY env var");
-                self.admin.api_key = key;
-            }
+        if let Ok(key) = std::env::var("ARBITER_ADMIN_API_KEY")
+            && !key.is_empty()
+        {
+            tracing::info!("admin API key loaded from ARBITER_ADMIN_API_KEY env var");
+            self.admin.api_key = key;
         }
-        if let Ok(secret) = std::env::var("ARBITER_SIGNING_SECRET") {
-            if !secret.is_empty() {
-                tracing::info!("signing secret loaded from ARBITER_SIGNING_SECRET env var");
-                self.admin.signing_secret = secret;
-            }
+        if let Ok(secret) = std::env::var("ARBITER_SIGNING_SECRET")
+            && !secret.is_empty()
+        {
+            tracing::info!("signing secret loaded from ARBITER_SIGNING_SECRET env var");
+            self.admin.signing_secret = secret;
         }
     }
 
@@ -648,25 +648,24 @@ impl ArbiterConfig {
         }
 
         // Policy file existence check.
-        if let Some(ref path) = self.policy.file {
-            if !Path::new(path).exists() {
-                warnings.push(ConfigWarning::Error(format!(
-                    "[policy] file '{}' does not exist",
-                    path
-                )));
-            }
+        if let Some(ref path) = self.policy.file
+            && !Path::new(path).exists()
+        {
+            warnings.push(ConfigWarning::Error(format!(
+                "[policy] file '{}' does not exist",
+                path
+            )));
         }
 
         // Audit file path parent directory must exist.
-        if let Some(ref path) = self.audit.file_path {
-            if let Some(parent) = Path::new(path).parent() {
-                if !parent.exists() {
-                    warnings.push(ConfigWarning::Error(format!(
-                        "[audit] file_path parent directory '{}' does not exist",
-                        parent.display()
-                    )));
-                }
-            }
+        if let Some(ref path) = self.audit.file_path
+            && let Some(parent) = Path::new(path).parent()
+            && !parent.exists()
+        {
+            warnings.push(ConfigWarning::Error(format!(
+                "[audit] file_path parent directory '{}' does not exist",
+                parent.display()
+            )));
         }
 
         // Warn when credential injection is configured with HTTP upstream.
@@ -758,22 +757,21 @@ impl ArbiterConfig {
         // Warn when SQLite backend is configured without encryption.
         // Field-level encryption protects session data at rest but is opt-in.
         // Operators should be aware that data is stored in plaintext by default.
-        if self.storage.backend == "sqlite" {
-            if std::env::var("ARBITER_STORAGE_ENCRYPTION_KEY")
+        if self.storage.backend == "sqlite"
+            && std::env::var("ARBITER_STORAGE_ENCRYPTION_KEY")
                 .ok()
                 .filter(|v| !v.trim().is_empty())
                 .is_none()
-            {
-                tracing::warn!(
-                    "SECURITY: SQLite storage encryption is disabled. \
-                     Set ARBITER_STORAGE_ENCRYPTION_KEY for encryption at rest."
-                );
-                warnings.push(ConfigWarning::Warn(
-                    "[storage] SQLite backend without ARBITER_STORAGE_ENCRYPTION_KEY; \
-                     session data stored in plaintext. Set the env var for encryption at rest."
-                        .into(),
-                ));
-            }
+        {
+            tracing::warn!(
+                "SECURITY: SQLite storage encryption is disabled. \
+                 Set ARBITER_STORAGE_ENCRYPTION_KEY for encryption at rest."
+            );
+            warnings.push(ConfigWarning::Warn(
+                "[storage] SQLite backend without ARBITER_STORAGE_ENCRYPTION_KEY; \
+                 session data stored in plaintext. Set the env var for encryption at rest."
+                    .into(),
+            ));
         }
 
         warnings
@@ -1056,9 +1054,9 @@ provider = "env"
         let config = ArbiterConfig::parse(toml).unwrap();
         let warnings = config.validate();
         assert!(
-            !warnings.iter().any(
-                |w| matches!(w, ConfigWarning::Error(msg) if msg.contains("provider"))
-            ),
+            !warnings
+                .iter()
+                .any(|w| matches!(w, ConfigWarning::Error(msg) if msg.contains("provider"))),
             "env credential provider should not produce a provider error: {warnings:?}"
         );
     }

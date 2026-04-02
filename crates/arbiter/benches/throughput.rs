@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 use arbiter::config::ArbiterConfig;
 
@@ -127,9 +127,9 @@ fn bench_config_validate(c: &mut Criterion) {
 }
 
 fn bench_end_to_end_mcp_pipeline(c: &mut Criterion) {
-    use arbiter_behavior::{classify_operation, AnomalyConfig, AnomalyDetector};
-    use arbiter_mcp::parser::{parse_mcp_body, ParseResult};
-    use arbiter_policy::{evaluate, EvalContext, PolicyConfig};
+    use arbiter_behavior::{AnomalyConfig, AnomalyDetector, classify_operation};
+    use arbiter_mcp::parser::{ParseResult, parse_mcp_body};
+    use arbiter_policy::{EvalContext, PolicyConfig, evaluate};
 
     let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -224,10 +224,7 @@ keywords = ["read", "analyze"]
 
                 // Stage 3: Session enforcement
                 let session_result = session_store
-                    .use_session(
-                        black_box(session.session_id),
-                        black_box("read_file"),
-                    )
+                    .use_session(black_box(session.session_id), black_box("read_file"))
                     .await;
                 black_box(&session_result);
 

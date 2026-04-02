@@ -276,32 +276,32 @@ impl AnomalyDetector {
             // Argument scanning for destructive patterns applies to Read and
             // Unknown tiers. Unknown-tier sessions should receive at least
             // read-level scrutiny for destructive argument patterns.
-            if matches!(tier, IntentTier::Read | IntentTier::Unknown) {
-                if let Some(args) = arguments {
-                    // Pattern-based scan against configurable suspicious patterns.
-                    let text = args.to_string().to_lowercase();
-                    for pattern in &self.config.suspicious_arg_patterns {
-                        if text.contains(pattern.as_str()) {
-                            let reason = format!(
-                                "suspicious argument content in tool '{}': pattern '{}' detected",
-                                tool_name, pattern
-                            );
-                            return if self.config.escalate_to_deny {
-                                AnomalyResponse::Denied { reason }
-                            } else {
-                                AnomalyResponse::Flagged { reason }
-                            };
-                        }
-                    }
-
-                    // Structural analysis for read/unknown-intent sessions.
-                    if let Some(reason) = check_structural_anomalies(args, tool_name) {
+            if matches!(tier, IntentTier::Read | IntentTier::Unknown)
+                && let Some(args) = arguments
+            {
+                // Pattern-based scan against configurable suspicious patterns.
+                let text = args.to_string().to_lowercase();
+                for pattern in &self.config.suspicious_arg_patterns {
+                    if text.contains(pattern.as_str()) {
+                        let reason = format!(
+                            "suspicious argument content in tool '{}': pattern '{}' detected",
+                            tool_name, pattern
+                        );
                         return if self.config.escalate_to_deny {
                             AnomalyResponse::Denied { reason }
                         } else {
                             AnomalyResponse::Flagged { reason }
                         };
                     }
+                }
+
+                // Structural analysis for read/unknown-intent sessions.
+                if let Some(reason) = check_structural_anomalies(args, tool_name) {
+                    return if self.config.escalate_to_deny {
+                        AnomalyResponse::Denied { reason }
+                    } else {
+                        AnomalyResponse::Flagged { reason }
+                    };
                 }
             }
             return AnomalyResponse::Normal;
@@ -343,12 +343,7 @@ impl AnomalyDetector {
 ///
 /// Returns `Some(reason)` if an anomaly is found, `None` otherwise.
 fn check_structural_anomalies(args: &serde_json::Value, tool_name: &str) -> Option<String> {
-    let obj = match args.as_object() {
-        Some(o) => o,
-        // If args is not an object at top level, it is itself structurally unusual
-        // but we only inspect object-shaped argument maps here.
-        None => return None,
-    };
+    let obj = args.as_object()?;
 
     for (key, value) in obj {
         // 1. Nested objects/arrays: read ops should only have scalar params.
@@ -373,22 +368,21 @@ fn check_structural_anomalies(args: &serde_json::Value, tool_name: &str) -> Opti
         }
 
         // 3. Long string values (potential payload injection).
-        if let Some(s) = value.as_str() {
-            if s.len() > MAX_READ_ARG_STRING_LEN {
-                return Some(format!(
-                    "structural anomaly in tool '{}': argument '{}' has a string value of {} bytes (max {})",
-                    tool_name,
-                    key,
-                    s.len(),
-                    MAX_READ_ARG_STRING_LEN,
-                ));
-            }
+        if let Some(s) = value.as_str()
+            && s.len() > MAX_READ_ARG_STRING_LEN
+        {
+            return Some(format!(
+                "structural anomaly in tool '{}': argument '{}' has a string value of {} bytes (max {})",
+                tool_name,
+                key,
+                s.len(),
+                MAX_READ_ARG_STRING_LEN,
+            ));
         }
     }
 
     None
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -572,7 +566,11 @@ mod tests {
             ..Default::default()
         });
 
-        let result = detector.detect("manage the cluster", OperationType::Delete, "delete_resource");
+        let result = detector.detect(
+            "manage the cluster",
+            OperationType::Delete,
+            "delete_resource",
+        );
         assert!(
             matches!(result, AnomalyResponse::Flagged { .. }),
             "admin intent should flag delete operations, got: {result:?}"
@@ -586,7 +584,11 @@ mod tests {
             ..Default::default()
         });
 
-        let result = detector.detect("manage the cluster", OperationType::Delete, "delete_resource");
+        let result = detector.detect(
+            "manage the cluster",
+            OperationType::Delete,
+            "delete_resource",
+        );
         assert!(
             matches!(result, AnomalyResponse::Denied { .. }),
             "admin intent with escalation should deny delete operations, got: {result:?}"
@@ -692,10 +694,7 @@ mod tests {
         assert_eq!(detector.classify_intent("READ FILES"), IntentTier::Read);
 
         // "ANALYZE" (uppercase) should also match read tier
-        assert_eq!(
-            detector.classify_intent("ANALYZE DATA"),
-            IntentTier::Read
-        );
+        assert_eq!(detector.classify_intent("ANALYZE DATA"), IntentTier::Read);
 
         // "CREATE" (uppercase) should match write tier
         assert_eq!(

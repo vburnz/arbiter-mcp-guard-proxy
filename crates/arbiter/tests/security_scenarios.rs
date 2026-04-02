@@ -71,7 +71,10 @@ async fn start_echo_server(port: u16) {
 
 /// Convenience: spin up arbiter with the given TOML config string.
 /// Returns (proxy_port, admin_port, JoinHandle).
-async fn spawn_arbiter(config_toml: &str, config_dir: &std::path::Path) -> tokio::task::JoinHandle<()> {
+async fn spawn_arbiter(
+    config_toml: &str,
+    config_dir: &std::path::Path,
+) -> tokio::task::JoinHandle<()> {
     let config_file = config_dir.join("arbiter.toml");
     {
         let mut f = std::fs::File::create(&config_file).unwrap();
@@ -150,12 +153,7 @@ fn mcp_tool_call(id: u64, tool_name: &str, arguments: serde_json::Value) -> serd
 }
 
 /// Build a basic config TOML with allow-all policy.
-fn base_config(
-    proxy_port: u16,
-    admin_port: u16,
-    upstream_port: u16,
-    policy_path: &str,
-) -> String {
+fn base_config(proxy_port: u16, admin_port: u16, upstream_port: u16, policy_path: &str) -> String {
     format!(
         r#"
 [proxy]
@@ -374,7 +372,8 @@ allowed_tools = []
     let client = reqwest::Client::new();
 
     // Setup: register agent with read capabilities.
-    let (agent_id, _token) = register_agent(&client, admin_port, "user:demo-reader", &["read"]).await;
+    let (agent_id, _token) =
+        register_agent(&client, admin_port, "user:demo-reader", &["read"]).await;
 
     // Create session scoped to read_file and list_dir only.
     let session_id = create_session(
@@ -495,7 +494,8 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
     let handle = spawn_arbiter(&config, temp_dir.path()).await;
     let client = reqwest::Client::new();
 
-    let (agent_id, _token) = register_agent(&client, admin_port, "user:demo-exhaust", &["read"]).await;
+    let (agent_id, _token) =
+        register_agent(&client, admin_port, "user:demo-exhaust", &["read"]).await;
 
     // Create session with rate_limit_per_minute = 3, large budget.
     let session_id = create_session(
@@ -514,7 +514,11 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
 
     // First 3 calls should succeed (within rate limit).
     for i in 1..=3 {
-        let req = mcp_tool_call(i, "read_file", serde_json::json!({"path": format!("/file-{i}.txt")}));
+        let req = mcp_tool_call(
+            i,
+            "read_file",
+            serde_json::json!({"path": format!("/file-{i}.txt")}),
+        );
         let resp = client
             .post(format!("http://127.0.0.1:{proxy_port}/"))
             .header("x-agent-id", &agent_id)
@@ -588,7 +592,8 @@ allowed_tools = []
     let handle = spawn_arbiter(&config, temp_dir.path()).await;
     let client = reqwest::Client::new();
 
-    let (agent_id, _token) = register_agent(&client, admin_port, "user:demo-budget", &["read"]).await;
+    let (agent_id, _token) =
+        register_agent(&client, admin_port, "user:demo-budget", &["read"]).await;
 
     // Create session with call_budget = 5 (no rate limit).
     let session_id = create_session(
@@ -606,7 +611,11 @@ allowed_tools = []
 
     // First 5 calls should succeed (within budget).
     for i in 1..=5 {
-        let req = mcp_tool_call(i, "read_file", serde_json::json!({"path": format!("/file-{i}.txt")}));
+        let req = mcp_tool_call(
+            i,
+            "read_file",
+            serde_json::json!({"path": format!("/file-{i}.txt")}),
+        );
         let resp = client
             .post(format!("http://127.0.0.1:{proxy_port}/"))
             .header("x-agent-id", &agent_id)
@@ -693,7 +702,8 @@ allowed_tools = []
     let handle = spawn_arbiter(&config, temp_dir.path()).await;
     let client = reqwest::Client::new();
 
-    let (agent_id, _token) = register_agent(&client, admin_port, "user:demo-replay", &["read"]).await;
+    let (agent_id, _token) =
+        register_agent(&client, admin_port, "user:demo-replay", &["read"]).await;
 
     // Create session with a very short TTL (2 seconds).
     let session_id = create_session(
@@ -786,7 +796,8 @@ allowed_tools = []
     let handle = spawn_arbiter(&config, temp_dir.path()).await;
     let client = reqwest::Client::new();
 
-    let (agent_id, _token) = register_agent(&client, admin_port, "user:demo-replay-close", &["read"]).await;
+    let (agent_id, _token) =
+        register_agent(&client, admin_port, "user:demo-replay-close", &["read"]).await;
 
     // Create a long-lived session.
     let session_id = create_session(
@@ -894,8 +905,13 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
     let client = reqwest::Client::new();
 
     // Register the attacker agent (user:rogue-contractor, NOT user:trusted-team).
-    let (agent_id, _token) =
-        register_agent(&client, admin_port, "user:rogue-contractor", &["read", "deploy"]).await;
+    let (agent_id, _token) = register_agent(
+        &client,
+        admin_port,
+        "user:rogue-contractor",
+        &["read", "deploy"],
+    )
+    .await;
 
     let session_id = create_session(
         &client,
@@ -1166,7 +1182,10 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
         .post(format!("http://127.0.0.1:{proxy_port}/"))
         .header("x-agent-id", &agent_id)
         .header("x-arbiter-session", &session_id)
-        .header("x-delegation-chain", format!("user:demo-drifter>{agent_id}"))
+        .header(
+            "x-delegation-chain",
+            format!("user:demo-drifter>{agent_id}"),
+        )
         .header("content-type", "application/json")
         .json(&read_req)
         .send()
@@ -1194,7 +1213,10 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
         .post(format!("http://127.0.0.1:{proxy_port}/"))
         .header("x-agent-id", &agent_id)
         .header("x-arbiter-session", &session_id)
-        .header("x-delegation-chain", format!("user:demo-drifter>{agent_id}"))
+        .header(
+            "x-delegation-chain",
+            format!("user:demo-drifter>{agent_id}"),
+        )
         .header("content-type", "application/json")
         .json(&write_req)
         .send()

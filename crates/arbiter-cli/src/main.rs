@@ -574,12 +574,10 @@ async fn self_update(
 
     println!("Downloading {target_name}.tar.gz...");
 
-    let tarball_url = format!(
-        "https://github.com/{REPO}/releases/download/{target}/{target_name}.tar.gz"
-    );
-    let checksum_url = format!(
-        "https://github.com/{REPO}/releases/download/{target}/checksums-sha256.txt"
-    );
+    let tarball_url =
+        format!("https://github.com/{REPO}/releases/download/{target}/{target_name}.tar.gz");
+    let checksum_url =
+        format!("https://github.com/{REPO}/releases/download/{target}/checksums-sha256.txt");
 
     // Download tarball
     let tarball_bytes = client
@@ -607,7 +605,11 @@ async fn self_update(
 
     // Verify SHA256
     println!("Verifying SHA256 checksum...");
-    verify_sha256(&tarball_bytes, &format!("{target_name}.tar.gz"), &checksums_text)?;
+    verify_sha256(
+        &tarball_bytes,
+        &format!("{target_name}.tar.gz"),
+        &checksums_text,
+    )?;
 
     // Extract to temp dir
     let tmpdir = tempfile::tempdir().map_err(|e| format!("cannot create temp dir: {e}"))?;
@@ -643,9 +645,7 @@ async fn self_update(
 
     let install_dir = std::env::var("ARBITER_INSTALL_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            dirs_or_home().join(".arbiter").join("bin")
-        });
+        .unwrap_or_else(|_| dirs_or_home().join(".arbiter").join("bin"));
 
     println!("Installing to {}...", install_dir.display());
     std::fs::create_dir_all(&install_dir)
@@ -695,7 +695,7 @@ fn detect_platform() -> Result<(&'static str, &'static str), String> {
     } else if cfg!(target_os = "macos") {
         "macos"
     } else {
-        return Err(format!("unsupported OS"));
+        return Err("unsupported OS".to_string());
     };
 
     let arch = if cfg!(target_arch = "x86_64") {
@@ -703,7 +703,7 @@ fn detect_platform() -> Result<(&'static str, &'static str), String> {
     } else if cfg!(target_arch = "aarch64") {
         "arm64"
     } else {
-        return Err(format!("unsupported architecture"));
+        return Err("unsupported architecture".to_string());
     };
 
     Ok((os, arch))
@@ -740,7 +740,8 @@ fn verify_sha256(data: &[u8], filename: &str, checksums: &str) -> Result<(), Str
         .and_then(|mut child| {
             child.stdin.as_mut().unwrap().write_all(data)?;
             child.wait_with_output()
-        }) {
+        })
+    {
         String::from_utf8_lossy(&output.stdout)
             .split_whitespace()
             .next()

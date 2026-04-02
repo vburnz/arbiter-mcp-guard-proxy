@@ -474,18 +474,14 @@ mod tests {
             level: StoredTrustLevel,
         ) -> Result<(), StorageError> {
             let mut agents = self.agents.write().await;
-            let agent = agents
-                .get_mut(&id)
-                .ok_or(StorageError::AgentNotFound(id))?;
+            let agent = agents.get_mut(&id).ok_or(StorageError::AgentNotFound(id))?;
             agent.trust_level = level;
             Ok(())
         }
 
         async fn deactivate_agent(&self, id: Uuid) -> Result<(), StorageError> {
             let mut agents = self.agents.write().await;
-            let agent = agents
-                .get_mut(&id)
-                .ok_or(StorageError::AgentNotFound(id))?;
+            let agent = agents.get_mut(&id).ok_or(StorageError::AgentNotFound(id))?;
             agent.active = false;
             Ok(())
         }
@@ -649,10 +645,7 @@ mod tests {
 
         // Double deactivation should error
         let result = registry.deactivate_agent(agent.id).await;
-        assert!(
-            result.is_err(),
-            "double deactivation should return error"
-        );
+        assert!(result.is_err(), "double deactivation should return error");
     }
 
     /// Error mapping preserves context for non-AgentNotFound errors.
@@ -675,14 +668,11 @@ mod tests {
                     "InternalError should preserve the original error message, got: {msg}"
                 );
             }
-            other => panic!(
-                "expected InternalError for Backend error, got: {other}"
-            ),
+            other => panic!("expected InternalError for Backend error, got: {other}"),
         }
 
         // Serialization errors should also map to InternalError
-        let err =
-            storage_err_to_identity(StorageError::Serialization("bad json".into()));
+        let err = storage_err_to_identity(StorageError::Serialization("bad json".into()));
         assert!(
             matches!(err, IdentityError::InternalError(_)),
             "Serialization errors should map to InternalError"

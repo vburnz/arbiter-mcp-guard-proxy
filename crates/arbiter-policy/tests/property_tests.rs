@@ -2,12 +2,10 @@ use proptest::prelude::*;
 
 use arbiter_identity::{Agent, TrustLevel};
 use arbiter_mcp::context::McpRequest;
-use arbiter_policy::{
-    evaluate, Decision, EvalContext, PolicyConfig,
-};
 use arbiter_policy::model::{
     AgentMatch, Disposition, Effect, IntentMatch, ParameterConstraint, Policy, PrincipalMatch,
 };
+use arbiter_policy::{Decision, EvalContext, PolicyConfig, evaluate};
 use chrono::Utc;
 use uuid::Uuid;
 

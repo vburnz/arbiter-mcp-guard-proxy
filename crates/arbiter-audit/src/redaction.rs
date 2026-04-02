@@ -104,8 +104,8 @@ fn has_letter_boundary_match(key: &str, pattern: &Regex) -> bool {
     for m in pattern.find_iter(key) {
         let before = key[..m.start()].chars().next_back();
         let after = key[m.end()..].chars().next();
-        let preceded_by_letter = before.map_or(false, |c| c.is_ascii_alphabetic());
-        let followed_by_letter = after.map_or(false, |c| c.is_ascii_alphabetic());
+        let preceded_by_letter = before.is_some_and(|c| c.is_ascii_alphabetic());
+        let followed_by_letter = after.is_some_and(|c| c.is_ascii_alphabetic());
         if !preceded_by_letter && !followed_by_letter {
             return true;
         }
@@ -239,12 +239,21 @@ mod tests {
         let redacted = redact_arguments(&input, &config);
 
         // Fields where "key" appears at a word boundary are redacted.
-        assert_eq!(redacted["api_key"], REDACTED, "api_key has 'key' at boundary");
+        assert_eq!(
+            redacted["api_key"], REDACTED,
+            "api_key has 'key' at boundary"
+        );
         assert_eq!(redacted["key_id"], REDACTED, "key_id has 'key' at boundary");
 
         // Fields where "key" is embedded in other letters are NOT redacted.
-        assert_eq!(redacted["monkey"], "banana", "monkey should not be redacted");
-        assert_eq!(redacted["keyboard"], "qwerty", "keyboard should not be redacted");
+        assert_eq!(
+            redacted["monkey"], "banana",
+            "monkey should not be redacted"
+        );
+        assert_eq!(
+            redacted["keyboard"], "qwerty",
+            "keyboard should not be redacted"
+        );
 
         // Fields without "key" are left alone.
         assert_eq!(redacted["unrelated"], "visible");
@@ -321,10 +330,22 @@ mod tests {
             "authenticate_method": "oauth2"
         });
         let redacted = redact_arguments(&input, &config);
-        assert_eq!(redacted["keyboard"], "mechanical", "keyboard should not be redacted");
-        assert_eq!(redacted["monkey"], "curious george", "monkey should not be redacted");
-        assert_eq!(redacted["author"], "Jane Doe", "author should not be redacted");
-        assert_eq!(redacted["authenticate_method"], "oauth2", "authenticate_method should not be redacted");
+        assert_eq!(
+            redacted["keyboard"], "mechanical",
+            "keyboard should not be redacted"
+        );
+        assert_eq!(
+            redacted["monkey"], "curious george",
+            "monkey should not be redacted"
+        );
+        assert_eq!(
+            redacted["author"], "Jane Doe",
+            "author should not be redacted"
+        );
+        assert_eq!(
+            redacted["authenticate_method"], "oauth2",
+            "authenticate_method should not be redacted"
+        );
     }
 
     #[test]

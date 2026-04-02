@@ -1,9 +1,7 @@
 use proptest::prelude::*;
 
-use arbiter_session::{
-    DataSensitivity, SessionError, SessionStatus, TaskSession,
-};
 use arbiter_session::store::{CreateSessionRequest, SessionStore};
+use arbiter_session::{DataSensitivity, SessionError, SessionStatus, TaskSession};
 use chrono::Utc;
 use uuid::Uuid;
 

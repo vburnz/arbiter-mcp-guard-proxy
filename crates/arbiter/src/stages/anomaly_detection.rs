@@ -1,6 +1,6 @@
 //! Stage 9: Behavioral anomaly detection.
 
-use arbiter_behavior::{classify_operation, AnomalyDetector, AnomalyResponse};
+use arbiter_behavior::{AnomalyDetector, AnomalyResponse, classify_operation};
 use hyper::StatusCode;
 
 use super::StageVerdict;

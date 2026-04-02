@@ -19,7 +19,7 @@ use tokio::net::TcpListener;
 
 use arbiter_proxy::config::MiddlewareConfig;
 use arbiter_proxy::middleware::MiddlewareChain;
-use arbiter_proxy::proxy::{handle_request, ProxyState};
+use arbiter_proxy::proxy::{ProxyState, handle_request};
 
 /// Bind to an ephemeral port and return the listener + address.
 async fn ephemeral_listener() -> (TcpListener, SocketAddr) {

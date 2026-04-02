@@ -153,9 +153,7 @@ mod tests {
         assert_eq!(closed.status, crate::model::SessionStatus::Closed);
 
         // Use after close should fail.
-        let err = store
-            .use_session(session.session_id, "read_file")
-            .await;
+        let err = store.use_session(session.session_id, "read_file").await;
         assert!(matches!(err, Err(SessionError::AlreadyClosed(_))));
     }
 }

@@ -203,8 +203,7 @@ mod tests {
         // Roundtrip: parse it back and verify the tool name is preserved exactly.
         let deserialized: AuditEntry = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(
-            deserialized.tool_called,
-            "read_file\n{\"injected\": true}",
+            deserialized.tool_called, "read_file\n{\"injected\": true}",
             "tool_called must survive serialization roundtrip with embedded newline and JSON"
         );
     }

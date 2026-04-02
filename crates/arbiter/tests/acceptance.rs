@@ -82,8 +82,8 @@ async fn start_configurable_echo_server(port: u16, inject_in_response: Option<St
                                 "result": result,
                             });
                             let payload = serde_json::to_vec(&resp).unwrap();
-                            let mut builder = Response::builder()
-                                .header("content-type", "application/json");
+                            let mut builder =
+                                Response::builder().header("content-type", "application/json");
                             // Simulate malicious upstream injecting x-arbiter-* headers
                             builder = builder.header("x-arbiter-warning", "spoofed-by-upstream");
                             return Ok::<_, anyhow::Error>(
@@ -253,7 +253,10 @@ impl HarnessBuilder {
 impl TestHarness {
     /// Quick constructor for tests using allow-all policy.
     async fn with_policy(config_toml: &str, policy_toml: &str) -> Self {
-        HarnessBuilder::new(config_toml).policy(policy_toml).build().await
+        HarnessBuilder::new(config_toml)
+            .policy(policy_toml)
+            .build()
+            .await
     }
 
     fn proxy_url(&self, path: &str) -> String {
@@ -449,14 +452,7 @@ async fn rate_limiting_per_minute() {
     let h = TestHarness::with_policy(&base_config(), allow_all_policy()).await;
     let (agent_id, _) = h.register_agent("user:alice", &["read"], "basic").await;
     let session_id = h
-        .create_session_with_rate_limit(
-            &agent_id,
-            "read files",
-            &["read_file"],
-            100,
-            3600,
-            Some(2),
-        )
+        .create_session_with_rate_limit(&agent_id, "read files", &["read_file"], 100, 3600, Some(2))
         .await;
 
     // First 2 calls succeed
@@ -709,7 +705,11 @@ async fn delegation_cascade_deactivation() {
             serde_json::json!({"path": "/tmp/test"}),
         )
         .await;
-    assert_eq!(resp.status(), 200, "child session should work before cascade");
+    assert_eq!(
+        resp.status(),
+        200,
+        "child session should work before cascade"
+    );
 
     // Deactivate parent (cascade) via DELETE /agents/:id
     let resp = h
@@ -751,12 +751,7 @@ async fn admin_api_authentication() {
     let h = TestHarness::with_policy(&base_config(), allow_all_policy()).await;
 
     // No API key → 401
-    let resp = h
-        .client
-        .get(h.admin_url("/agents"))
-        .send()
-        .await
-        .unwrap();
+    let resp = h.client.get(h.admin_url("/agents")).send().await.unwrap();
     assert_eq!(resp.status(), 401, "missing API key should return 401");
 
     // Wrong API key → 403
@@ -809,12 +804,7 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
     let resp = h.client.get(h.proxy_url("/admin")).send().await.unwrap();
     assert_eq!(resp.status(), 403, "blocked path should return 403");
 
-    let resp = h
-        .client
-        .get(h.proxy_url("/internal"))
-        .send()
-        .await
-        .unwrap();
+    let resp = h.client.get(h.proxy_url("/internal")).send().await.unwrap();
     assert_eq!(resp.status(), 403, "blocked path should return 403");
 
     // Non-blocked path should pass through
@@ -925,7 +915,9 @@ async fn deny_by_default_no_policies() {
 /// Demo 07: Parameter constraints in policies.
 #[tokio::test]
 async fn parameter_constraint_violation() {
-    let h = TestHarness::with_policy(&base_config(), r#"
+    let h = TestHarness::with_policy(
+        &base_config(),
+        r#"
 [[policies]]
 id = "allow-generate-limited"
 effect = "allow"
@@ -934,17 +926,13 @@ allowed_tools = ["generate_text"]
 [[policies.parameter_constraints]]
 key = "max_tokens"
 max_value = 1000
-"#).await;
+"#,
+    )
+    .await;
 
     let (agent_id, _) = h.register_agent("user:alice", &["read"], "basic").await;
     let session_id = h
-        .create_session(
-            &agent_id,
-            "generate text",
-            &["generate_text"],
-            100,
-            3600,
-        )
+        .create_session(&agent_id, "generate text", &["generate_text"], 100, 3600)
         .await;
 
     // Within constraint: should succeed
@@ -1049,12 +1037,16 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
 #[tokio::test]
 async fn composition_session_allows_policy_denies() {
     // Policy only allows read_file, not write_file
-    let h = TestHarness::with_policy(&base_config(), r#"
+    let h = TestHarness::with_policy(
+        &base_config(),
+        r#"
 [[policies]]
 id = "allow-read-only"
 effect = "allow"
 allowed_tools = ["read_file"]
-"#).await;
+"#,
+    )
+    .await;
 
     let (agent_id, _) = h
         .register_agent("user:alice", &["read", "write"], "basic")
@@ -1163,13 +1155,7 @@ async fn stage_ordering_session_before_policy() {
     let h = TestHarness::with_policy(&base_config(), allow_all_policy()).await;
     let (agent_id, _) = h.register_agent("user:alice", &["read"], "basic").await;
     let session_id = h
-        .create_session(
-            &agent_id,
-            "read files",
-            &["read_file"],
-            100,
-            3600,
-        )
+        .create_session(&agent_id, "read files", &["read_file"], 100, 3600)
         .await;
 
     // Call with tool NOT in session whitelist → session denies before policy runs
@@ -1271,7 +1257,10 @@ async fn batch_mcp_all_tools_audited() {
                     .contains("read_file")
             })
         });
-    assert!(batch_entry.is_some(), "audit should record batch tool calls");
+    assert!(
+        batch_entry.is_some(),
+        "audit should record batch tool calls"
+    );
 }
 
 /// Trust degradation: accumulated anomalies demote agent trust level (RED-TEAM RED-88).
@@ -1399,10 +1388,12 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
 
     let h = HarnessBuilder::new(config)
         .policy(allow_all_policy())
-        .credentials(r#"
+        .credentials(
+            r#"
 [credentials]
 api_secret = "sk-super-secret-value-12345"
-"#)
+"#,
+        )
         .build()
         .await;
 
@@ -1441,9 +1432,7 @@ api_secret = "sk-super-secret-value-12345"
     // Response scrubbing replaces the credential value with [CREDENTIAL] before returning.
     // So the client sees [CREDENTIAL] instead of the raw secret — both injection and scrubbing worked.
     let body: serde_json::Value = resp.json().await.unwrap();
-    let received = body["result"]["received_body"]
-        .as_str()
-        .unwrap_or("");
+    let received = body["result"]["received_body"].as_str().unwrap_or("");
     // The ${CRED:...} pattern should NOT be present (it was resolved)
     assert!(
         !received.contains("${CRED:"),
@@ -1689,13 +1678,7 @@ async fn metrics_correctness_after_mixed_traffic() {
     let h = TestHarness::with_policy(&base_config(), allow_all_policy()).await;
     let (agent_id, _) = h.register_agent("user:alice", &["read"], "basic").await;
     let session_id = h
-        .create_session(
-            &agent_id,
-            "read files",
-            &["read_file"],
-            100,
-            3600,
-        )
+        .create_session(&agent_id, "read files", &["read_file"], 100, 3600)
         .await;
 
     // Successful call
@@ -1779,12 +1762,7 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
     let h = TestHarness::with_policy(config, allow_all_policy()).await;
 
     // No API key → 401
-    let resp = h
-        .client
-        .get(h.proxy_url("/metrics"))
-        .send()
-        .await
-        .unwrap();
+    let resp = h.client.get(h.proxy_url("/metrics")).send().await.unwrap();
     assert_eq!(
         resp.status(),
         401,
@@ -1832,12 +1810,7 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
 async fn health_endpoint_status() {
     let h = TestHarness::with_policy(&base_config(), allow_all_policy()).await;
 
-    let resp = h
-        .client
-        .get(h.proxy_url("/health"))
-        .send()
-        .await
-        .unwrap();
+    let resp = h.client.get(h.proxy_url("/health")).send().await.unwrap();
     assert_eq!(resp.status(), 200);
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["status"].as_str(), Some("healthy"));
@@ -1851,7 +1824,9 @@ async fn health_endpoint_status() {
 /// Policy explain endpoint: dry-run request against policies.
 #[tokio::test]
 async fn policy_explain_dry_run() {
-    let h = TestHarness::with_policy(&base_config(), r#"
+    let h = TestHarness::with_policy(
+        &base_config(),
+        r#"
 [[policies]]
 id = "allow-read-basic"
 effect = "allow"
@@ -1862,7 +1837,9 @@ trust_level = "basic"
 
 [policies.intent_match]
 keywords = ["read"]
-"#).await;
+"#,
+    )
+    .await;
     let (agent_id, _) = h.register_agent("user:alice", &["read"], "basic").await;
     let _session_id = h
         .create_session(&agent_id, "read files", &["read_file"], 100, 3600)
@@ -1949,7 +1926,9 @@ async fn session_without_agent_id_header() {
 /// Policy specificity: more specific policy wins over less specific.
 #[tokio::test]
 async fn policy_specificity_resolution() {
-    let h = TestHarness::with_policy(&base_config(), r#"
+    let h = TestHarness::with_policy(
+        &base_config(),
+        r#"
 [[policies]]
 id = "broad-allow"
 effect = "allow"
@@ -1962,7 +1941,9 @@ allowed_tools = ["delete_file"]
 
 [policies.agent_match]
 trust_level = "basic"
-"#).await;
+"#,
+    )
+    .await;
     let (agent_id, _) = h.register_agent("user:alice", &["read"], "basic").await;
     let session_id = h
         .create_session(
@@ -1983,7 +1964,11 @@ trust_level = "basic"
             serde_json::json!({"path": "/tmp/test"}),
         )
         .await;
-    assert_eq!(resp.status(), 200, "read_file should be allowed by broad policy");
+    assert_eq!(
+        resp.status(),
+        200,
+        "read_file should be allowed by broad policy"
+    );
 
     // delete_file: specific-deny-delete (trust_level match = more specific) should deny
     let resp = h
@@ -2020,11 +2005,7 @@ async fn nonexistent_session_returns_404() {
     // Returns 403 (not 404) to prevent session enumeration attacks:
     // an attacker should not be able to distinguish "session exists but
     // you don't own it" from "session doesn't exist".
-    assert_eq!(
-        resp.status(),
-        403,
-        "non-existent session should return 403"
-    );
+    assert_eq!(resp.status(), 403, "non-existent session should return 403");
 }
 
 /// GET requests pass through without session/policy enforcement
@@ -2094,7 +2075,9 @@ listen_port = {admin_port}
 api_key = "test-key"
 signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
 "#;
-    let h = TestHarness::with_policy(config, r#"
+    let h = TestHarness::with_policy(
+        config,
+        r#"
 [[policies]]
 id = "allow-data-analysis"
 effect = "allow"
@@ -2102,7 +2085,9 @@ allowed_tools = ["query_db"]
 
 [policies.intent_match]
 regex = "(?i)data.*analy"
-"#).await;
+"#,
+    )
+    .await;
     let (agent_id, _) = h.register_agent("user:alice", &["read"], "basic").await;
 
     // Intent matches regex → allowed
@@ -2147,7 +2132,9 @@ async fn delegation_scope_narrowing_enforced() {
     let (parent_id, _) = h.register_agent("user:alice", &["read"], "basic").await;
 
     // Register a child agent
-    let (child_id, _) = h.register_agent("user:child", &["read", "write"], "basic").await;
+    let (child_id, _) = h
+        .register_agent("user:child", &["read", "write"], "basic")
+        .await;
 
     // Try to delegate with wider scope than parent's capabilities
     let resp = h
@@ -2237,12 +2224,16 @@ async fn budget_warning_headers() {
 #[tokio::test]
 async fn policy_reload_via_admin_endpoint() {
     // Start with restrictive policy
-    let h = TestHarness::with_policy(&base_config(), r#"
+    let h = TestHarness::with_policy(
+        &base_config(),
+        r#"
 [[policies]]
 id = "allow-noop"
 effect = "allow"
 allowed_tools = ["noop_tool"]
-"#).await;
+"#,
+    )
+    .await;
 
     let (agent_id, _) = h.register_agent("user:alice", &["read"], "basic").await;
     let session_id = h
@@ -2344,9 +2335,6 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
         assert!(seq.as_u64().is_some(), "sequence_number should be numeric");
     }
     if let Some(hash) = allow_entries[0].get("previous_hash") {
-        assert!(
-            hash.as_str().is_some(),
-            "previous_hash should be a string"
-        );
+        assert!(hash.as_str().is_some(), "previous_hash should be a string");
     }
 }

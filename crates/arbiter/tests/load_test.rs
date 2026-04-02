@@ -13,8 +13,8 @@
 
 use std::io::Write as _;
 use std::net::TcpListener;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 // ── Helpers (mirrored from integration.rs) ──────────────────────────
@@ -48,9 +48,7 @@ async fn start_echo_server(port: u16) {
 
                 // For POST with JSON body, echo as JSON-RPC response.
                 if method == "POST" && !body_bytes.is_empty() {
-                    if let Ok(req_json) =
-                        serde_json::from_slice::<serde_json::Value>(&body_bytes)
-                    {
+                    if let Ok(req_json) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
                         let resp = serde_json::json!({
                             "jsonrpc": "2.0",
                             "id": req_json.get("id"),
@@ -266,9 +264,7 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
                     Ok(resp) => {
                         let status = resp.status();
                         let body = resp.text().await.unwrap_or_default();
-                        eprintln!(
-                            "  [conn {conn_idx} req {req_idx}] non-success: {status} {body}"
-                        );
+                        eprintln!("  [conn {conn_idx} req {req_idx}] non-success: {status} {body}");
                         errors.fetch_add(1, Ordering::Relaxed);
                     }
                     Err(e) => {
@@ -323,10 +319,7 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
         error_rate < 5.0,
         "error rate {error_rate:.2}% exceeds 5% threshold"
     );
-    assert!(
-        successes > 0,
-        "at least some requests must succeed"
-    );
+    assert!(successes > 0, "at least some requests must succeed");
 
     // ── 7. Cleanup ──────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 fn bench_audit_entry_serialization(c: &mut Criterion) {
     use arbiter_audit::AuditEntry;
@@ -16,7 +16,7 @@ fn bench_audit_entry_serialization(c: &mut Criterion) {
 }
 
 fn bench_redaction(c: &mut Criterion) {
-    use arbiter_audit::{redact_arguments, RedactionConfig};
+    use arbiter_audit::{RedactionConfig, redact_arguments};
 
     let config = RedactionConfig::default();
     let value = serde_json::json!({

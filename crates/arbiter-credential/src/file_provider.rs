@@ -93,23 +93,37 @@ mod tests {
 
     #[tokio::test]
     async fn loads_plaintext_toml() {
-        let f = write_temp_toml(r#"
+        let f = write_temp_toml(
+            r#"
 [credentials]
 aws_key = "AKIAIOSFODNN7EXAMPLE"
 github_token = "ghp_abc123"
-"#);
+"#,
+        );
 
         let provider = FileProvider::from_path(f.path()).await.unwrap();
-        assert_eq!(provider.resolve("aws_key").await.unwrap().expose_secret(), "AKIAIOSFODNN7EXAMPLE");
-        assert_eq!(provider.resolve("github_token").await.unwrap().expose_secret(), "ghp_abc123");
+        assert_eq!(
+            provider.resolve("aws_key").await.unwrap().expose_secret(),
+            "AKIAIOSFODNN7EXAMPLE"
+        );
+        assert_eq!(
+            provider
+                .resolve("github_token")
+                .await
+                .unwrap()
+                .expose_secret(),
+            "ghp_abc123"
+        );
     }
 
     #[tokio::test]
     async fn not_found_returns_error() {
-        let f = write_temp_toml(r#"
+        let f = write_temp_toml(
+            r#"
 [credentials]
 one = "1"
-"#);
+"#,
+        );
         let provider = FileProvider::from_path(f.path()).await.unwrap();
         let err = provider.resolve("nonexistent").await.unwrap_err();
         assert!(matches!(err, CredentialError::NotFound(_)));
@@ -117,12 +131,14 @@ one = "1"
 
     #[tokio::test]
     async fn list_refs_returns_all_keys() {
-        let f = write_temp_toml(r#"
+        let f = write_temp_toml(
+            r#"
 [credentials]
 a = "1"
 b = "2"
 c = "3"
-"#);
+"#,
+        );
         let provider = FileProvider::from_path(f.path()).await.unwrap();
         let refs = provider.list_refs().await.unwrap();
         assert_eq!(refs.len(), 3);
@@ -147,26 +163,54 @@ c = "3"
 
     #[tokio::test]
     async fn toml_with_special_keys() {
-        let f = write_temp_toml(r#"
+        let f = write_temp_toml(
+            r#"
 [credentials]
 "my.api-key" = "secret-value"
 "dots.and.hyphens-too" = "another-secret"
 simple_key = "plain"
-"#);
+"#,
+        );
         let provider = FileProvider::from_path(f.path()).await.unwrap();
-        assert_eq!(provider.resolve("my.api-key").await.unwrap().expose_secret(), "secret-value");
-        assert_eq!(provider.resolve("dots.and.hyphens-too").await.unwrap().expose_secret(), "another-secret");
-        assert_eq!(provider.resolve("simple_key").await.unwrap().expose_secret(), "plain");
+        assert_eq!(
+            provider
+                .resolve("my.api-key")
+                .await
+                .unwrap()
+                .expose_secret(),
+            "secret-value"
+        );
+        assert_eq!(
+            provider
+                .resolve("dots.and.hyphens-too")
+                .await
+                .unwrap()
+                .expose_secret(),
+            "another-secret"
+        );
+        assert_eq!(
+            provider
+                .resolve("simple_key")
+                .await
+                .unwrap()
+                .expose_secret(),
+            "plain"
+        );
         assert_eq!(provider.list_refs().await.unwrap().len(), 3);
     }
 
     #[tokio::test]
     async fn empty_credentials_table() {
-        let f = write_temp_toml(r#"
+        let f = write_temp_toml(
+            r#"
 [credentials]
-"#);
+"#,
+        );
         let provider = FileProvider::from_path(f.path()).await.unwrap();
         assert!(provider.list_refs().await.unwrap().is_empty());
-        assert!(matches!(provider.resolve("anything").await.unwrap_err(), CredentialError::NotFound(_)));
+        assert!(matches!(
+            provider.resolve("anything").await.unwrap_err(),
+            CredentialError::NotFound(_)
+        ));
     }
 }
