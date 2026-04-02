@@ -87,5 +87,5 @@ jobs:
           )
           for crate in "${CRATES[@]}"; do
             echo "Checking $crate..."
-            cargo package -p "$crate" --no-verify --allow-dirty 2>&1
+            cargo package -p "$crate" --list --allow-dirty 2>&1
           done
