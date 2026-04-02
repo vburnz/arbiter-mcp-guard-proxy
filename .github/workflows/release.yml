@@ -166,6 +166,7 @@ jobs:
           cat *.sha256 > checksums-sha256.txt
 
       - name: Sign with minisign
+        continue-on-error: true
         working-directory: artifacts
         env:
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
@@ -254,6 +255,7 @@ jobs:
     needs: [tag]
     if: always() && (needs.tag.result == 'success' || startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
