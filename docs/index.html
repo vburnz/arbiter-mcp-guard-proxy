@@ -3,80 +3,78 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Arbiter: MCP Tool-Call Firewall</title>
-  <meta name="description" content="Open-source MCP tool-call firewall. Deny-by-default authorization, session budgets, drift detection, and audit logging for every tool call.">
-  <link rel="canonical" href="https://cyrenei.github.io/arbiter-mcp-firewall/">
-  <link rel="stylesheet" href="styles/site.css">
+  <title>Arbiter — Security for AI Agents</title>
+  <meta name="description" content="Identity and access management for AI agents. Deny-by-default authorization, session governance, and audit logging for every tool call.">
+  <link rel="canonical" href="https://arbiter-security.dev/">
+  <meta property="og:title" content="Arbiter — Security for AI Agents">
+  <meta property="og:description" content="Deny-by-default access control between your AI agents and the tools they reach for.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://arbiter-security.dev/">
+  <meta name="twitter:card" content="summary">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/home.css">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
   <nav>
-    <div class="inner">
-      <a class="logo" href="./">Arbiter</a>
-      <div class="links">
-        <a href="docs/">Docs</a>
-        <a href="https://github.com/cyrenei/arbiter-mcp-firewall">Code</a>
+    <div class="nav-inner">
+      <a class="logo" href="/">Arbiter</a>
+      <div class="nav-links">
+        <a href="/firewall">MCP Firewall</a>
+        <a href="https://github.com/cyrenei/arbiter-mcp-firewall">GitHub</a>
         <a class="sponsor" href="https://github.com/sponsors/cyrenei">Sponsor</a>
       </div>
     </div>
   </nav>
 
-  <main id="main" class="container">
-    <p class="tagline">MCP tool-call firewall.</p>
+  <main id="main">
+    <section class="hero">
+      <h1>Arbiter</h1>
+      <p class="tagline">Governs what AI agents are allowed to do.</p>
+      <p class="description">Deny-by-default access control between your AI agents and the tools they reach for. Every call authorized, budgeted, and logged.</p>
+      <div class="cta-group">
+        <a class="cta-primary" href="/firewall">Get Started</a>
+        <a class="cta-secondary" href="https://github.com/cyrenei/arbiter-mcp-firewall">View Source</a>
+      </div>
+    </section>
 
-    <div class="info-strip">
-      <span>v0.5.0</span>
-      <span>Apache-2.0</span>
-      <span>Rust</span>
-      <span><a href="https://github.com/cyrenei/arbiter-mcp-firewall">github.com/cyrenei/arbiter-mcp-firewall</a></span>
+    <div class="divider">
+      <span class="divider-label">firewall</span>
     </div>
 
-    <p>Arbiter governs what agents are allowed to do. It does not govern what
-    agents try to do. It sits between your AI agents and the MCP servers
-    they talk to, enforcing deny-by-default authorization on every tool
-    call.</p>
+    <section class="features">
+      <div class="feature">
+        <h3>Deny by default</h3>
+        <p>Every tool call hits the policy engine before it reaches the MCP server. No implicit allows. No fallback to open.</p>
+      </div>
+      <div class="feature">
+        <h3>Session governance</h3>
+        <p>Budgets, behavioral bounds, drift detection. Agents stay within the scope they were given.</p>
+      </div>
+      <div class="feature">
+        <h3>Audit trail</h3>
+        <p>Every authorization decision logged with PII automatically redacted. Full forensic replay of any session.</p>
+      </div>
+    </section>
 
-    <p>Traditional access control was built for humans who log in and make
-    decisions. Arbiter was built for agents that fire hundreds of tool calls
-    per session. It adds session budgets, tool whitelisting, drift detection,
-    credential injection, and structured audit logging with PII redaction.</p>
-
-    <h2>Install</h2>
-
-    <pre><code>curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh</code></pre>
-
-    <p class="desc">Downloads the latest binary for your platform (Linux or macOS) with SHA256 verification. No sudo required.</p>
-
-    <h2>Get Started</h2>
-
-    <ul class="doc-links">
-      <li><a href="docs/getting-started/quickstart.html">Quickstart</a>
-        <span class="desc">: clone to first proxied tool call in 5 minutes</span></li>
-      <li><a href="case-study.html">Case Study</a>
-        <span class="desc">: QuantumBank attack scenario with full audit trail</span></li>
-      <li><a href="docs/understanding/architecture.html">Architecture</a>
-        <span class="desc">: the 9-stage middleware chain</span></li>
-      <li><a href="demos/">Demos</a>
-        <span class="desc">: interactive attack scenarios</span></li>
-      <li><a href="docs/">Documentation</a>
-        <span class="desc">: guides, reference, and deployment</span></li>
-    </ul>
-
-    <h2>Support</h2>
-
-    <p>Report bugs and request features on
-    <a href="https://github.com/cyrenei/arbiter-mcp-firewall/issues">GitHub Issues</a>.</p>
-
-    <p>If Arbiter is useful to you, consider
-    <a href="https://github.com/sponsors/cyrenei">sponsoring the project</a>.</p>
+    <section class="install">
+      <h2>Install</h2>
+      <pre><code>curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh</code></pre>
+      <p class="note">Linux and macOS. SHA-256 verified. No sudo required.</p>
+    </section>
   </main>
 
   <footer>
-    <div class="container">
-      Arbiter v0.5.0 &middot; Apache-2.0 &middot;
-      <a href="https://github.com/cyrenei/arbiter-mcp-firewall">GitHub</a> &middot;
-      <a href="docs/">Docs</a>
+    <span>Arbiter &middot; Apache-2.0</span>
+    <div class="footer-links">
+      <a href="/firewall">MCP Firewall</a>
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall">GitHub</a>
+      <a href="https://github.com/sponsors/cyrenei">Sponsor</a>
+      <a href="mailto:arbitersecurity@proton.me">Contact</a>
+      <a href="pub-key.asc">PGP Key</a>
     </div>
   </footer>
 </body>

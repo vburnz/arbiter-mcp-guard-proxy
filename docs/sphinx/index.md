@@ -56,6 +56,8 @@ taste for the high-end stuff.
 
 **[Sponsor on GitHub](https://github.com/sponsors/cyrenei)**
 
+Contact: [arbitersecurity@proton.me](mailto:arbitersecurity@proton.me) ([PGP Public Key](https://cyrenei.github.io/arbiter-mcp-firewall/pub-key.asc))
+
 ```{toctree}
 :maxdepth: 2
 :caption: Understanding Arbiter
