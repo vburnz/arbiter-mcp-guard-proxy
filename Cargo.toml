@@ -12,6 +12,8 @@ authors = ["Cyrene I."]
 description = "MCP tool-call firewall: deny-by-default authorization, session management, drift detection, and audit for every tool call"
 repository = "https://github.com/cyrenei/arbiter-mcp-firewall"
 homepage = "https://cyrenei.github.io/arbiter-mcp-firewall"
+keywords = ["mcp", "firewall", "proxy", "security", "ai-agent"]
+categories = ["authentication", "network-programming"]
 
 [workspace.dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

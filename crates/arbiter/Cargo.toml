@@ -1,8 +1,13 @@
 [package]
-name = "arbiter"
+name = "arbiter-mcp-firewall"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Arbiter: MCP tool-call firewall, integration binary"
 
 [lib]
@@ -36,18 +41,18 @@ secrecy = "0.10"
 subtle = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-arbiter-audit = { path = "../arbiter-audit" }
-arbiter-credential = { path = "../arbiter-credential" }
-arbiter-behavior = { path = "../arbiter-behavior" }
-arbiter-identity = { path = "../arbiter-identity" }
-arbiter-lifecycle = { path = "../arbiter-lifecycle" }
-arbiter-mcp = { path = "../arbiter-mcp" }
-arbiter-metrics = { path = "../arbiter-metrics" }
-arbiter-oauth = { path = "../arbiter-oauth" }
-arbiter-policy = { path = "../arbiter-policy" }
-arbiter-proxy = { path = "../arbiter-proxy" }
-arbiter-session = { path = "../arbiter-session" }
-arbiter-storage = { path = "../arbiter-storage" }
+arbiter-audit = { path = "../arbiter-audit", version = "0.5.0" }
+arbiter-credential = { path = "../arbiter-credential", version = "0.5.0" }
+arbiter-behavior = { path = "../arbiter-behavior", version = "0.5.0" }
+arbiter-identity = { path = "../arbiter-identity", version = "0.5.0" }
+arbiter-lifecycle = { path = "../arbiter-lifecycle", version = "0.5.0" }
+arbiter-mcp = { path = "../arbiter-mcp", version = "0.5.0" }
+arbiter-metrics = { path = "../arbiter-metrics", version = "0.5.0" }
+arbiter-oauth = { path = "../arbiter-oauth", version = "0.5.0" }
+arbiter-policy = { path = "../arbiter-policy", version = "0.5.0" }
+arbiter-proxy = { path = "../arbiter-proxy", version = "0.5.0" }
+arbiter-session = { path = "../arbiter-session", version = "0.5.0" }
+arbiter-storage = { path = "../arbiter-storage", version = "0.5.0" }
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1", features = ["v4"] }
 toml = "0.8"

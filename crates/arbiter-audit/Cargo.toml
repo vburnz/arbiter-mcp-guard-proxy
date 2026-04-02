@@ -3,6 +3,11 @@ name = "arbiter-audit"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Structured audit logging with argument redaction for the Arbiter proxy"
 
 [dependencies]

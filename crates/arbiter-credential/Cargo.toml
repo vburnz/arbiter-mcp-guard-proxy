@@ -3,6 +3,11 @@ name = "arbiter-credential"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Credential resolution and injection middleware for the Arbiter proxy"
 
 [dependencies]
@@ -20,7 +25,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 zeroize = "1"
 
 [dev-dependencies]
-arbiter-session = { path = "../arbiter-session" }
+arbiter-session = { path = "../arbiter-session", version = "0.5.0" }
 criterion = "0.5"
 proptest = "1"
 tempfile = "3"
