@@ -22,7 +22,9 @@ Two processes run side by side:
 
 ## The Middleware Chain
 
-Every proxied request passes through nine stages, in order. Every response passes back through the same stages in reverse. Any stage can reject a request. When that happens, the response goes straight back to the client and downstream stages are skipped. Audit and metrics are still recorded regardless.
+Every proxied request passes through nine logical stages, in order. Any stage can reject a request — when that happens, the response goes straight back to the client and downstream stages are skipped. Audit and metrics are still recorded regardless.
+
+The implementation has additional sub-stages between the nine listed here (enforcement gates, credential injection, session lifecycle checks). These are internal to the proxy handler and don't change the logical model, but if you're reading the source you'll see them as intermediate stages in `handler.rs`.
 
 ```text
 Request ──> Tracing ──> Metrics ──> Audit ──> OAuth ──> MCP Parse
@@ -42,7 +44,7 @@ Here's what each stage does:
 | 6 | **Session** | Validates the session is active, tool is whitelisted, budget isn't blown |
 | 7 | **Policy** | Evaluates authorization rules; deny-by-default, specificity wins |
 | 8 | **Behavior** | Flags when operation types diverge from session scope |
-| 9 | **Forward** | Proxies the request upstream and inspects the response on the way back |
+| 9 | **Forward** | Terminal handler: proxies to upstream, then runs credential scrubbing, audit finalization, and metrics on the response before returning it |
 
 The ordering matters. OAuth runs before session validation because you need to know *who* is making the request before you can check *whether they're allowed*. Policy runs after session validation because the session provides the declared intent that policies match against.
 
@@ -70,7 +72,7 @@ Walk through what happens when an agent calls `query_transactions`:
 
 10. **Forward** proxies the request to the upstream MCP server. On the response path back through this stage:
 
-    - **Credential scrubbing** checks whether any credentials that Arbiter injected into the outgoing request appear in the upstream response. If they do (in any encoding: plaintext, URL-encoded, JSON-escaped, hex, or base64), they're replaced with `[CREDENTIAL]` before the agent sees them.
+    - **Credential scrubbing** checks whether any credentials that Arbiter injected into the outgoing request appear in the upstream response. If they do (in any encoding: plaintext, URL-encoded, JSON-escaped, hex, base64, base64url, double-URL-encoded, or Unicode JSON-escaped), they're replaced with `[CREDENTIAL]` before the agent sees them.
     - **Audit** finalizes the entry with upstream status code, latency, and any credential scrubbing actions, then writes the JSONL record.
     - **Metrics** records the request duration histogram and tool call counter.
 
@@ -103,9 +105,11 @@ You don't need to know the crate structure to use Arbiter. It ships as a single 
 
 Arbiter processes traffic in both directions:
 
-**Inbound (requests):** The MCP parser extracts tool names and arguments. The policy engine evaluates parameter constraints. Credential references (`${CRED:ref}`) are resolved and injected. Audit redaction strips sensitive fields before logging.
+**Inbound (requests):** The MCP parser extracts tool names and arguments. The policy engine evaluates parameter constraints. Audit redaction strips sensitive fields before logging.
 
-**Outbound (responses):** When credential injection is active, Arbiter scrubs the response body for the exact secrets it injected. Scrubbing covers multiple encodings (plaintext, URL-encoded, JSON-escaped, hex, base64) to catch credentials even if the upstream transforms them. Matches are replaced with `[CREDENTIAL]`. This is a closed-scope defense: Arbiter scrubs what it injected, not arbitrary patterns.
+**Pre-forward (credential injection):** After all authorization checks pass, credential references (`${CRED:ref}`) in the request body and headers are resolved and substituted with real values just before the request is forwarded upstream. The agent never sees the resolved credentials. This happens after policy and behavior checks, ensuring that only authorized requests receive credential injection.
+
+**Outbound (responses):** When credential injection is active, Arbiter scrubs the response body for the exact secrets it injected. Scrubbing covers multiple encodings (plaintext, URL-encoded, JSON-escaped, hex, base64, base64url, double-URL-encoded, Unicode JSON-escaped) to catch credentials even if the upstream transforms them. Matches are replaced with `[CREDENTIAL]`. This is a closed-scope defense: Arbiter scrubs what it injected, not arbitrary patterns.
 
 ## Key Design Decisions
 
