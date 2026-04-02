@@ -639,37 +639,29 @@ async fn self_update(
     }
 
     let new_binary = new_binary.ok_or("could not find arbiter binary in archive")?;
+    let new_ctl = new_binary.parent().unwrap().join("arbiter-ctl");
 
-    // Determine where the current arbiter binary lives.
-    // We update the arbiter proxy binary, not ourselves (arbiter-ctl).
     let install_dir = std::env::var("ARBITER_INSTALL_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
             dirs_or_home().join(".arbiter").join("bin")
         });
 
-    let target_path = install_dir.join("arbiter");
-
-    println!("Installing to {}...", target_path.display());
+    println!("Installing to {}...", install_dir.display());
     std::fs::create_dir_all(&install_dir)
         .map_err(|e| format!("cannot create {}: {e}", install_dir.display()))?;
 
-    // Atomic replace: copy to temp file in same dir, then rename
-    let tmp_target = install_dir.join(".arbiter.update.tmp");
-    std::fs::copy(&new_binary, &tmp_target)
-        .map_err(|e| format!("cannot copy binary: {e}"))?;
+    // Atomic replace for arbiter
+    atomic_install(&new_binary, &install_dir.join("arbiter"))?;
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&tmp_target, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| format!("cannot set permissions: {e}"))?;
+    // Also update arbiter-ctl if present in tarball
+    if new_ctl.exists() {
+        atomic_install(&new_ctl, &install_dir.join("arbiter-ctl"))?;
+        println!("Updated arbiter + arbiter-ctl to {target}");
+    } else {
+        println!("Updated arbiter to {target}");
     }
 
-    std::fs::rename(&tmp_target, &target_path)
-        .map_err(|e| format!("cannot replace binary: {e}"))?;
-
-    println!("Updated arbiter to {target}");
     println!("Restart the arbiter proxy for changes to take effect.");
 
     Ok(())
@@ -765,6 +757,21 @@ fn verify_sha256(data: &[u8], filename: &str, checksums: &str) -> Result<(), Str
     }
 
     println!("Checksum verified: {actual}");
+    Ok(())
+}
+
+fn atomic_install(src: &std::path::Path, dest: &std::path::Path) -> Result<(), String> {
+    let tmp = dest.with_extension("update.tmp");
+    std::fs::copy(src, &tmp).map_err(|e| format!("cannot copy binary: {e}"))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| format!("cannot set permissions: {e}"))?;
+    }
+
+    std::fs::rename(&tmp, dest).map_err(|e| format!("cannot replace {}: {e}", dest.display()))?;
     Ok(())
 }
 
