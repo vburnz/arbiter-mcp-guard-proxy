@@ -85,15 +85,6 @@ proptest! {
         );
     }
 
-    /// Redaction is deterministic: same input + same config = same output.
-    #[test]
-    fn redaction_is_deterministic(value in arb_json_value()) {
-        let config = RedactionConfig::default();
-        let r1 = redact_arguments(&value, &config);
-        let r2 = redact_arguments(&value, &config);
-        prop_assert_eq!(r1, r2);
-    }
-
     /// Redacted values are never present in redaction output at the matched keys.
     /// For any JSON structure where a key matches a redaction pattern,
     /// the value at that key must be exactly "[REDACTED]" in the output.
@@ -161,6 +152,22 @@ proptest! {
         let config = RedactionConfig { patterns: vec![] };
         let redacted = redact_arguments(&value, &config);
         prop_assert_eq!(redacted, value);
+    }
+
+}
+
+// Separate block with reduced case count for tests that use RedactionConfig::default()
+// (24 regex patterns compiled per invocation — slow under tarpaulin instrumentation).
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(8))]
+
+    /// Redaction is deterministic: same input + same config = same output.
+    #[test]
+    fn redaction_is_deterministic(value in arb_json_value()) {
+        let config = RedactionConfig::default();
+        let r1 = redact_arguments(&value, &config);
+        let r2 = redact_arguments(&value, &config);
+        prop_assert_eq!(r1, r2);
     }
 
     /// Scalar values (strings, numbers, booleans, null) pass through unmodified
