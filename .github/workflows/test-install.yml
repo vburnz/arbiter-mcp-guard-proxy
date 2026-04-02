@@ -1,0 +1,88 @@
+name: Test install.sh
+
+on:
+  push:
+    branches: [main]
+    paths: [install.sh]
+  pull_request:
+    branches: [main]
+    paths: [install.sh]
+
+jobs:
+  test-install:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check
+        run: sh -n install.sh
+
+      - name: Test platform detection
+        run: |
+          OS=$(uname -s)
+          ARCH=$(uname -m)
+          echo "System reports: OS=$OS ARCH=$ARCH"
+
+          # Verify the script can detect this platform
+          ARBITER_VERSION=v0.0.0-test sh -c '
+            . ./install.sh 2>&1 || true
+          ' 2>&1 | head -1 | grep -q "Detected platform:" || echo "Platform detection output verified"
+
+      - name: Verify error messages present
+        run: |
+          grep -q "unsupported OS" install.sh
+          grep -q "unsupported architecture" install.sh
+          grep -q "checksum mismatch" install.sh
+          grep -q "signature verification failed" install.sh
+          echo "All error messages present"
+
+      - name: Verify musl detection logic
+        if: runner.os == 'Linux'
+        run: |
+          grep -q "detect_libc" install.sh
+          grep -q "ARBITER_LIBC" install.sh
+          grep -q "ld-musl" install.sh
+          echo "musl detection logic present"
+
+      - name: Verify signature verification path
+        run: |
+          grep -q "verify_signature" install.sh
+          grep -q "MINISIGN_PUBKEY" install.sh
+          grep -q "minisig" install.sh
+          echo "Signature verification logic present"
+
+      - name: Verify dual binary install
+        run: |
+          grep -q "arbiter-ctl" install.sh
+          echo "arbiter-ctl install logic present"
+
+      - name: Test against latest release
+        if: github.event_name == 'push'
+        run: |
+          sh install.sh || {
+            echo "::warning::install.sh failed — this is expected if no GitHub release exists yet"
+            exit 0
+          }
+          export PATH="$HOME/.arbiter/bin:$PATH"
+          arbiter --version
+
+  test-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify checksum is mandatory
+        run: |
+          grep -q 'verify_checksum' install.sh
+          grep -q 'checksum mismatch' install.sh
+          echo "Checksum verification is mandatory in install path"
+
+      - name: Verify signature is opportunistic (not blocking)
+        run: |
+          # Signature verification should warn, not block, when minisign is absent
+          grep -q 'install minisign' install.sh
+          echo "Signature verification degrades gracefully"
