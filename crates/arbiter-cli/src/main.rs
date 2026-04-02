@@ -8,7 +8,7 @@ const REPO: &str = "cyrenei/arbiter-mcp-firewall";
 
 /// Arbiter CLI: agent lifecycle management, diagnostics, and policy tooling.
 #[derive(Parser)]
-#[command(name = "arbiter", about = "Arbiter agent lifecycle management CLI")]
+#[command(name = "arbiter", version, about = "Arbiter agent lifecycle management CLI")]
 struct Cli {
     /// Base URL of the Arbiter lifecycle API.
     #[arg(long, env = "ARBITER_API_URL", default_value = "http://127.0.0.1:3000")]

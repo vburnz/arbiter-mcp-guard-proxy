@@ -109,13 +109,13 @@ main() {
                     ;;
                 *)
                     printf "\nTo add manually:\n  %s\n" "$_line"
-                    printf "Add that line to %s to make it permanent.\n" "$_profile"
+                    printf "Add that line to %s to persist across sessions.\n" "$_profile"
                     ;;
             esac
         else
-            printf "\nAdd Arbiter to your PATH:\n"
+            printf "\nAdd Arbiter to your PATH for this session:\n"
             printf "  %s\n" "$_line"
-            printf "\nTo make it permanent, add that line to your shell profile (~/.bashrc, ~/.zshrc, etc.)\n"
+            printf "\nTo persist across sessions, add that line to your shell profile (~/.bashrc, ~/.zshrc, etc.)\n"
         fi
     fi
 

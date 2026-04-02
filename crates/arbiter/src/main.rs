@@ -12,7 +12,7 @@ use tracing_subscriber::EnvFilter;
 
 /// Arbiter: MCP tool-call firewall.
 #[derive(Parser, Debug)]
-#[command(name = "arbiter", about = "MCP tool-call firewall")]
+#[command(name = "arbiter", version, about = "MCP tool-call firewall")]
 struct Cli {
     /// Path to the arbiter.toml configuration file.
     #[arg(short, long, default_value = "arbiter.toml", env = "ARBITER_CONFIG")]
