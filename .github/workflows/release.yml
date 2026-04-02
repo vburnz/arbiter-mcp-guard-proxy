@@ -158,6 +158,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: arbiter-*
           merge-multiple: true
 
       - name: Generate checksums
