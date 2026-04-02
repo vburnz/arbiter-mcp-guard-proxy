@@ -8,6 +8,6 @@ pub mod classifier;
 pub mod detector;
 pub mod tracker;
 
-pub use classifier::{classify_operation, OperationType};
+pub use classifier::{OperationType, classify_operation};
 pub use detector::{AnomalyConfig, AnomalyDetector, AnomalyResponse};
 pub use tracker::{BehaviorTracker, CallRecord};

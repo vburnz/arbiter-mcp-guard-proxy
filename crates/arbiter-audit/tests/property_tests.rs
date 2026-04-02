@@ -1,7 +1,7 @@
 use proptest::prelude::*;
 
-use arbiter_audit::{redact_arguments, AuditEntry, RedactionConfig};
 use arbiter_audit::redaction::REDACTED;
+use arbiter_audit::{AuditEntry, RedactionConfig, redact_arguments};
 use uuid::Uuid;
 
 /// Strategy for generating arbitrary JSON values up to moderate depth.
@@ -16,20 +16,15 @@ fn arb_json_value() -> impl Strategy<Value = serde_json::Value> {
 
     // Recursive structure (objects and arrays) with limited depth.
     leaf.prop_recursive(
-        3,   // max depth
-        64,  // max nodes
-        8,   // items per collection
+        3,  // max depth
+        64, // max nodes
+        8,  // items per collection
         |inner| {
             prop_oneof![
                 // Array of values.
-                prop::collection::vec(inner.clone(), 0..4)
-                    .prop_map(serde_json::Value::Array),
+                prop::collection::vec(inner.clone(), 0..4).prop_map(serde_json::Value::Array),
                 // Object with string keys.
-                prop::collection::vec(
-                    ("[a-zA-Z_]{1,16}", inner),
-                    0..4,
-                )
-                .prop_map(|pairs| {
+                prop::collection::vec(("[a-zA-Z_]{1,16}", inner), 0..4,).prop_map(|pairs| {
                     let map: serde_json::Map<String, serde_json::Value> =
                         pairs.into_iter().collect();
                     serde_json::Value::Object(map)
@@ -42,11 +37,11 @@ fn arb_json_value() -> impl Strategy<Value = serde_json::Value> {
 /// Strategy for generating audit entries with random field values.
 fn arb_audit_entry() -> impl Strategy<Value = AuditEntry> {
     (
-        "[a-z0-9-]{1,32}",      // agent_id
-        "[a-z_]{1,32}",          // tool_called
+        "[a-z0-9-]{1,32}",                        // agent_id
+        "[a-z_]{1,32}",                           // tool_called
         prop_oneof!["allow", "deny", "escalate"], // authorization_decision
-        0u64..10000,             // latency_ms
-        prop::option::of(200u16..600), // upstream_status
+        0u64..10000,                              // latency_ms
+        prop::option::of(200u16..600),            // upstream_status
     )
         .prop_map(|(agent_id, tool_called, auth_dec, latency, status)| {
             let mut entry = AuditEntry::new(Uuid::new_v4());

@@ -11,10 +11,10 @@
 //! as a 64-character hex string (32 bytes).
 
 use aes_gcm::{
-    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit},
 };
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use rand::RngCore;
 
 /// Errors from encryption / decryption operations.
@@ -123,8 +123,7 @@ impl FieldEncryptor {
             .decrypt(nonce, ciphertext)
             .map_err(|e| EncryptionError::DecryptionFailed(e.to_string()))?;
 
-        String::from_utf8(plaintext)
-            .map_err(|e| EncryptionError::DecryptionFailed(e.to_string()))
+        String::from_utf8(plaintext).map_err(|e| EncryptionError::DecryptionFailed(e.to_string()))
     }
 
     /// Encrypt a `Vec<String>` by JSON-serializing then encrypting.
@@ -137,14 +136,13 @@ impl FieldEncryptor {
     /// Decrypt back to `Vec<String>`.
     pub fn decrypt_string_vec(&self, ciphertext: &str) -> Result<Vec<String>, EncryptionError> {
         let json = self.decrypt_field(ciphertext)?;
-        serde_json::from_str(&json)
-            .map_err(|e| EncryptionError::DecryptionFailed(e.to_string()))
+        serde_json::from_str(&json).map_err(|e| EncryptionError::DecryptionFailed(e.to_string()))
     }
 }
 
 /// Decode a hex string to bytes (no external hex crate needed).
 fn hex_decode(hex: &str) -> Result<Vec<u8>, EncryptionError> {
-    if hex.len() % 2 != 0 {
+    if !hex.len().is_multiple_of(2) {
         return Err(EncryptionError::InvalidHex(
             "odd number of hex characters".into(),
         ));
@@ -225,16 +223,14 @@ mod tests {
         let encrypted = enc1.encrypt_field("secret").unwrap();
         let result = enc2.decrypt_field(&encrypted);
 
-        assert!(
-            result.is_err(),
-            "decryption with wrong key must fail"
-        );
+        assert!(result.is_err(), "decryption with wrong key must fail");
     }
 
     #[test]
     fn missing_env_key_returns_none() {
         // Ensure the variable is not set
-        std::env::remove_var("ARBITER_STORAGE_ENCRYPTION_KEY");
+        // SAFETY: test-only, single-threaded access to env var
+        unsafe { std::env::remove_var("ARBITER_STORAGE_ENCRYPTION_KEY") };
         let result = FieldEncryptor::from_env().unwrap();
         assert!(result.is_none(), "from_env with no var must return None");
     }
@@ -307,9 +303,10 @@ mod tests {
         let key = test_key();
         let hex = key_to_hex(&key);
 
-        std::env::set_var("ARBITER_STORAGE_ENCRYPTION_KEY", &hex);
+        // SAFETY: test-only, single-threaded access to env var
+        unsafe { std::env::set_var("ARBITER_STORAGE_ENCRYPTION_KEY", &hex) };
         let result = FieldEncryptor::from_env();
-        std::env::remove_var("ARBITER_STORAGE_ENCRYPTION_KEY");
+        unsafe { std::env::remove_var("ARBITER_STORAGE_ENCRYPTION_KEY") };
 
         let enc = result.unwrap().expect("should return Some when key is set");
         let ct = enc.encrypt_field("env test").unwrap();

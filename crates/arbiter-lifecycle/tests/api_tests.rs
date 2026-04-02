@@ -641,40 +641,86 @@ async fn session_creation_validates_parameters() {
     }
 
     // time_limit_secs: 0 → 400 (must be positive)
-    let (status, error) =
-        create_session(&c, &base, &agent_id, serde_json::json!({"time_limit_secs": 0})).await;
+    let (status, error) = create_session(
+        &c,
+        &base,
+        &agent_id,
+        serde_json::json!({"time_limit_secs": 0}),
+    )
+    .await;
     assert_eq!(status, 400, "time_limit_secs=0 should be rejected");
-    assert!(error.contains("positive"), "error should mention 'positive': {error}");
+    assert!(
+        error.contains("positive"),
+        "error should mention 'positive': {error}"
+    );
 
     // time_limit_secs: 100000 → 400 (cannot exceed 86400)
-    let (status, error) =
-        create_session(&c, &base, &agent_id, serde_json::json!({"time_limit_secs": 100000})).await;
+    let (status, error) = create_session(
+        &c,
+        &base,
+        &agent_id,
+        serde_json::json!({"time_limit_secs": 100000}),
+    )
+    .await;
     assert_eq!(status, 400, "time_limit_secs=100000 should be rejected");
-    assert!(error.contains("86400"), "error should mention '86400': {error}");
+    assert!(
+        error.contains("86400"),
+        "error should mention '86400': {error}"
+    );
 
     // call_budget: 0 → 400 (must be positive)
     let (status, error) =
         create_session(&c, &base, &agent_id, serde_json::json!({"call_budget": 0})).await;
     assert_eq!(status, 400, "call_budget=0 should be rejected");
-    assert!(error.contains("positive"), "error should mention 'positive': {error}");
+    assert!(
+        error.contains("positive"),
+        "error should mention 'positive': {error}"
+    );
 
     // call_budget: 2000000 → 400 (cannot exceed 1000000)
-    let (status, error) =
-        create_session(&c, &base, &agent_id, serde_json::json!({"call_budget": 2000000})).await;
+    let (status, error) = create_session(
+        &c,
+        &base,
+        &agent_id,
+        serde_json::json!({"call_budget": 2000000}),
+    )
+    .await;
     assert_eq!(status, 400, "call_budget=2000000 should be rejected");
-    assert!(error.contains("1000000"), "error should mention '1000000': {error}");
+    assert!(
+        error.contains("1000000"),
+        "error should mention '1000000': {error}"
+    );
 
     // declared_intent: "" → 400 (must not be empty)
-    let (status, error) =
-        create_session(&c, &base, &agent_id, serde_json::json!({"declared_intent": ""})).await;
+    let (status, error) = create_session(
+        &c,
+        &base,
+        &agent_id,
+        serde_json::json!({"declared_intent": ""}),
+    )
+    .await;
     assert_eq!(status, 400, "empty declared_intent should be rejected");
-    assert!(error.contains("empty"), "error should mention 'empty': {error}");
+    assert!(
+        error.contains("empty"),
+        "error should mention 'empty': {error}"
+    );
 
     // declared_intent: "   " → 400 (whitespace-only, trimmed to empty)
-    let (status, error) =
-        create_session(&c, &base, &agent_id, serde_json::json!({"declared_intent": "   "})).await;
-    assert_eq!(status, 400, "whitespace-only declared_intent should be rejected");
-    assert!(error.contains("empty"), "error should mention 'empty': {error}");
+    let (status, error) = create_session(
+        &c,
+        &base,
+        &agent_id,
+        serde_json::json!({"declared_intent": "   "}),
+    )
+    .await;
+    assert_eq!(
+        status, 400,
+        "whitespace-only declared_intent should be rejected"
+    );
+    assert!(
+        error.contains("empty"),
+        "error should mention 'empty': {error}"
+    );
 }
 
 #[tokio::test]
@@ -816,8 +862,14 @@ async fn list_delegations_shows_chain() {
     assert_eq!(res.status(), 200);
     let body: serde_json::Value = res.json().await.unwrap();
     assert_eq!(body["agent_id"], parent_id);
-    let outgoing = body["outgoing"].as_array().expect("outgoing should be an array");
-    assert_eq!(outgoing.len(), 1, "parent should have exactly 1 outgoing delegation");
+    let outgoing = body["outgoing"]
+        .as_array()
+        .expect("outgoing should be an array");
+    assert_eq!(
+        outgoing.len(),
+        1,
+        "parent should have exactly 1 outgoing delegation"
+    );
     assert_eq!(outgoing[0]["to"].as_str().unwrap(), child_id);
 }
 

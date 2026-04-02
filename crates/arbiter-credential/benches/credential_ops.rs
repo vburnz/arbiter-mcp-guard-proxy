@@ -1,9 +1,9 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 use arbiter_credential::error::CredentialError;
 use arbiter_credential::inject::{find_refs, scrub_response_plain};
-use arbiter_credential::provider::{CredentialProvider, CredentialRef};
 use arbiter_credential::inject_credentials;
+use arbiter_credential::provider::{CredentialProvider, CredentialRef};
 use async_trait::async_trait;
 use std::collections::HashMap;
 
@@ -25,10 +25,7 @@ impl BenchProvider {
 
 #[async_trait]
 impl CredentialProvider for BenchProvider {
-    async fn resolve(
-        &self,
-        reference: &str,
-    ) -> Result<secrecy::SecretString, CredentialError> {
+    async fn resolve(&self, reference: &str) -> Result<secrecy::SecretString, CredentialError> {
         self.store
             .get(reference)
             .map(|v| secrecy::SecretString::from(v.clone()))
@@ -71,13 +68,10 @@ fn bench_inject_credentials(c: &mut Criterion) {
     c.bench_function("inject_credentials_3_refs", |b| {
         b.iter(|| {
             rt.block_on(async {
-                let result = inject_credentials(
-                    black_box(body),
-                    black_box(&headers),
-                    black_box(&provider),
-                )
-                .await
-                .unwrap();
+                let result =
+                    inject_credentials(black_box(body), black_box(&headers), black_box(&provider))
+                        .await
+                        .unwrap();
                 black_box(result);
             })
         })
@@ -109,12 +103,7 @@ fn bench_scrub_response(c: &mut Criterion) {
     }"#;
 
     c.bench_function("scrub_response_5_known_values", |b| {
-        b.iter(|| {
-            scrub_response_plain(
-                black_box(response_body),
-                black_box(&known_values),
-            )
-        })
+        b.iter(|| scrub_response_plain(black_box(response_body), black_box(&known_values)))
     });
 }
 

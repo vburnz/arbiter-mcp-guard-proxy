@@ -188,7 +188,10 @@ mod tests {
         let mut session = test_session();
         assert_eq!(session.rate_limit_per_minute, None);
         for _ in 0..1000 {
-            assert!(!session.check_rate_limit(), "None rate limit must never deny");
+            assert!(
+                !session.check_rate_limit(),
+                "None rate limit must never deny"
+            );
         }
         // With no rate limit configured, window calls should stay at zero
         // because the method returns early before touching the counter.

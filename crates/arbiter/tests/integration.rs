@@ -2748,9 +2748,7 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
 
     // Verify initial trust level is "trusted".
     let resp = client
-        .get(format!(
-            "http://127.0.0.1:{admin_port}/agents/{agent_id}"
-        ))
+        .get(format!("http://127.0.0.1:{admin_port}/agents/{agent_id}"))
         .header("x-api-key", "test-key")
         .send()
         .await
@@ -2814,9 +2812,7 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
 
     // Check that the agent's trust level has been demoted.
     let resp = client
-        .get(format!(
-            "http://127.0.0.1:{admin_port}/agents/{agent_id}"
-        ))
+        .get(format!("http://127.0.0.1:{admin_port}/agents/{agent_id}"))
         .header("x-api-key", "test-key")
         .send()
         .await
@@ -3331,9 +3327,7 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
         .iter()
         .filter_map(|v| v.to_str().ok())
         .collect();
-    let has_spoofed_warning = warning_values
-        .iter()
-        .any(|v| v.contains("SPOOFED"));
+    let has_spoofed_warning = warning_values.iter().any(|v| v.contains("SPOOFED"));
     assert!(
         !has_spoofed_warning,
         "upstream X-Arbiter-Warning spoofing must be stripped. Got: {:?}",
@@ -3416,7 +3410,9 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
 
     // GET request: bypasses ALL MCP enforcement (no session, no policy, no behavior).
     let resp = client
-        .get(format!("http://127.0.0.1:{proxy_port}/v1/sensitive/admin/data"))
+        .get(format!(
+            "http://127.0.0.1:{proxy_port}/v1/sensitive/admin/data"
+        ))
         .send()
         .await
         .unwrap();
@@ -3433,7 +3429,9 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
 
     // PUT request: also bypasses enforcement.
     let resp = client
-        .put(format!("http://127.0.0.1:{proxy_port}/v1/dangerous/operation"))
+        .put(format!(
+            "http://127.0.0.1:{proxy_port}/v1/dangerous/operation"
+        ))
         .body("arbitrary data")
         .send()
         .await
@@ -3446,7 +3444,9 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
 
     // DELETE request: also bypasses enforcement.
     let resp = client
-        .delete(format!("http://127.0.0.1:{proxy_port}/v1/critical/resource"))
+        .delete(format!(
+            "http://127.0.0.1:{proxy_port}/v1/critical/resource"
+        ))
         .send()
         .await
         .unwrap();

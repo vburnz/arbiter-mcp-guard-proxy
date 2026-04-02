@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
-use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::DecodingKey;
+use jsonwebtoken::jwk::JwkSet;
 
 use crate::error::OAuthError;
 

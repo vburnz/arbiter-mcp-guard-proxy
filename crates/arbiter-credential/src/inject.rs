@@ -165,7 +165,10 @@ fn scrub_single_value(scrubbed: &mut String, value: &str) {
     }
     // Base64url variant (RFC 4648 S5: '-' '_', no padding).
     let b64url_encoded = base64url_encode_value(value);
-    if b64url_encoded != value && b64url_encoded != b64_encoded && scrubbed.contains(&b64url_encoded) {
+    if b64url_encoded != value
+        && b64url_encoded != b64_encoded
+        && scrubbed.contains(&b64url_encoded)
+    {
         warn!("base64url-encoded credential value detected in response body, scrubbing");
         *scrubbed = scrubbed.replace(&b64url_encoded, REDACTED);
     }
@@ -359,7 +362,10 @@ mod tests {
 
     /// Helper: create a Vec<SecretString> from plain string slices.
     fn secret_vec(values: &[&str]) -> Vec<SecretString> {
-        values.iter().map(|v| SecretString::from(v.to_string())).collect()
+        values
+            .iter()
+            .map(|v| SecretString::from(v.to_string()))
+            .collect()
     }
 
     #[tokio::test]
@@ -538,9 +544,8 @@ mod tests {
             full[1..full.len() - 1].to_string()
         };
 
-        let body = format!(
-            "plain={secret} url={url_enc} json={json_enc} hex={hex_enc} b64={b64_enc}"
-        );
+        let body =
+            format!("plain={secret} url={url_enc} json={json_enc} hex={hex_enc} b64={b64_enc}");
         let known = secret_vec(&[secret]);
 
         let scrubbed = scrub_response(&body, &known);
@@ -561,23 +566,29 @@ mod tests {
         let body = "first=${CRED:valid_key}&second=${CRED:missing_key}";
 
         let result = inject_credentials(body, &[], &provider).await;
-        assert!(result.is_err(), "injection must fail when any ref is unresolvable");
-        assert!(matches!(result.unwrap_err(), CredentialError::NotFound(ref name) if name == "missing_key"));
+        assert!(
+            result.is_err(),
+            "injection must fail when any ref is unresolvable"
+        );
+        assert!(
+            matches!(result.unwrap_err(), CredentialError::NotFound(ref name) if name == "missing_key")
+        );
     }
 
     #[tokio::test]
     async fn resolved_values_captured_at_injection_time() {
-        let provider = MockProvider::new(&[
-            ("key_a", "alpha-secret"),
-            ("key_b", "beta-secret"),
-        ]);
+        let provider = MockProvider::new(&[("key_a", "alpha-secret"), ("key_b", "beta-secret")]);
         let body = "a=${CRED:key_a} b=${CRED:key_b}";
 
         let result = inject_credentials(body, &[], &provider).await.unwrap();
 
         assert_eq!(result.body, "a=alpha-secret b=beta-secret");
 
-        let exposed: Vec<&str> = result.resolved_values.iter().map(|s| s.expose_secret()).collect();
+        let exposed: Vec<&str> = result
+            .resolved_values
+            .iter()
+            .map(|s| s.expose_secret())
+            .collect();
         assert!(exposed.contains(&"alpha-secret"));
         assert!(exposed.contains(&"beta-secret"));
         assert_eq!(result.resolved_values.len(), 2);
@@ -614,10 +625,7 @@ mod tests {
 
     #[tokio::test]
     async fn recursive_injection_does_not_re_expand() {
-        let provider = MockProvider::new(&[
-            ("outer", "${CRED:inner}"),
-            ("inner", "real-secret"),
-        ]);
+        let provider = MockProvider::new(&[("outer", "${CRED:inner}"), ("inner", "real-secret")]);
         let body = "key=${CRED:outer}";
 
         let result = inject_credentials(body, &[], &provider).await.unwrap();
@@ -661,7 +669,10 @@ mod tests {
         assert!(find_refs("${CRED:ref&other}").is_empty());
         assert!(find_refs("${CRED:ref|pipe}").is_empty());
         assert!(find_refs("${CRED:}").is_empty());
-        assert_eq!(find_refs("${CRED:valid.ref-name_123}"), vec!["valid.ref-name_123"]);
+        assert_eq!(
+            find_refs("${CRED:valid.ref-name_123}"),
+            vec!["valid.ref-name_123"]
+        );
         assert_eq!(find_refs("${CRED:API_KEY}"), vec!["API_KEY"]);
         assert_eq!(find_refs("${CRED:my-secret.v2}"), vec!["my-secret.v2"]);
     }
@@ -672,7 +683,11 @@ mod tests {
 
     fn test_base64url_encode(input: &str) -> String {
         let standard = base64_encode_value(input);
-        standard.replace('+', "-").replace('/', "_").trim_end_matches('=').to_string()
+        standard
+            .replace('+', "-")
+            .replace('/', "_")
+            .trim_end_matches('=')
+            .to_string()
     }
 
     #[test]
@@ -680,8 +695,10 @@ mod tests {
         let secret = "secret+key/value";
         let b64url_encoded = test_base64url_encode(secret);
         let b64_standard = base64_encode_value(secret);
-        assert_ne!(b64url_encoded, b64_standard,
-            "base64url and standard base64 should differ for this input");
+        assert_ne!(
+            b64url_encoded, b64_standard,
+            "base64url and standard base64 should differ for this input"
+        );
 
         let body = format!("token={b64url_encoded} end");
         let known = secret_vec(&[secret]);
@@ -698,8 +715,10 @@ mod tests {
         let secret = "sk-key";
         let upper_hex: String = secret.bytes().map(|b| format!("{:02X}", b)).collect();
         let lower_hex: String = secret.bytes().map(|b| format!("{:02x}", b)).collect();
-        assert_ne!(upper_hex, lower_hex,
-            "test requires hex representations to differ: upper={upper_hex} lower={lower_hex}");
+        assert_ne!(
+            upper_hex, lower_hex,
+            "test requires hex representations to differ: upper={upper_hex} lower={lower_hex}"
+        );
 
         let body = format!("hex={upper_hex} end");
         let known = secret_vec(&[secret]);
@@ -761,14 +780,18 @@ mod tests {
         // scrubbing all encoding variants.
         let secrets = secret_vec(&["my-api-key-999"]);
         let b64 = base64_encode_value("my-api-key-999");
-        let hex: String = "my-api-key-999".bytes().map(|b| format!("{:02x}", b)).collect();
+        let hex: String = "my-api-key-999"
+            .bytes()
+            .map(|b| format!("{:02x}", b))
+            .collect();
 
-        let body = format!(
-            "plain=my-api-key-999 b64={b64} hex={hex}"
-        );
+        let body = format!("plain=my-api-key-999 b64={b64} hex={hex}");
         let scrubbed = scrub_response(&body, &secrets);
 
-        assert!(!scrubbed.contains("my-api-key-999"), "plaintext must be scrubbed");
+        assert!(
+            !scrubbed.contains("my-api-key-999"),
+            "plaintext must be scrubbed"
+        );
         assert!(!scrubbed.contains(&b64), "base64 must be scrubbed");
         assert!(!scrubbed.contains(&hex), "hex must be scrubbed");
         assert_eq!(
@@ -783,7 +806,10 @@ mod tests {
         // Lowercase percent-encoded: '/' becomes %2f instead of %2F
         let response = "result: my-secret%2fvalue";
         let scrubbed = scrub_response(response, &[secret]);
-        assert!(!scrubbed.contains("my-secret"), "lowercase percent-encoded credential should be scrubbed");
+        assert!(
+            !scrubbed.contains("my-secret"),
+            "lowercase percent-encoded credential should be scrubbed"
+        );
         assert!(scrubbed.contains(REDACTED));
     }
 
@@ -792,7 +818,10 @@ mod tests {
         let secret = SecretString::from("abc".to_string());
         let response = r#"{"data": "\u0061\u0062\u0063"}"#;
         let scrubbed = scrub_response(response, &[secret]);
-        assert!(!scrubbed.contains(r"\u0061\u0062\u0063"), "unicode-escaped credential should be scrubbed");
+        assert!(
+            !scrubbed.contains(r"\u0061\u0062\u0063"),
+            "unicode-escaped credential should be scrubbed"
+        );
         assert!(scrubbed.contains(REDACTED));
     }
 }

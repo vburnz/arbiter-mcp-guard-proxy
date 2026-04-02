@@ -320,14 +320,14 @@ impl PolicyConfig {
 
         // Step 3: Compile regexes.
         for policy in &mut config.policies {
-            if let Some(ref pattern) = policy.intent_match.regex {
-                if let Err(e) = Regex::new(pattern) {
-                    diagnostics.push(PolicyDiagnostic {
-                        level: "error".into(),
-                        policy_id: Some(policy.id.clone()),
-                        message: format!("invalid regex '{}': {}", pattern, e),
-                    });
-                }
+            if let Some(ref pattern) = policy.intent_match.regex
+                && let Err(e) = Regex::new(pattern)
+            {
+                diagnostics.push(PolicyDiagnostic {
+                    level: "error".into(),
+                    policy_id: Some(policy.id.clone()),
+                    message: format!("invalid regex '{}': {}", pattern, e),
+                });
             }
         }
 
@@ -487,7 +487,14 @@ priority = 1001
 "#;
         let err = PolicyConfig::from_toml(toml_over).unwrap_err();
         assert!(
-            matches!(err, crate::PolicyError::PriorityTooHigh { priority: 1001, max: 1000, .. }),
+            matches!(
+                err,
+                crate::PolicyError::PriorityTooHigh {
+                    priority: 1001,
+                    max: 1000,
+                    ..
+                }
+            ),
             "priority 1001 must be rejected, got: {:?}",
             err
         );
@@ -534,7 +541,14 @@ regex = "{}"
         );
         let err = PolicyConfig::from_toml(&toml_over).unwrap_err();
         assert!(
-            matches!(err, crate::PolicyError::RegexTooLong { length: 501, max: 500, .. }),
+            matches!(
+                err,
+                crate::PolicyError::RegexTooLong {
+                    length: 501,
+                    max: 500,
+                    ..
+                }
+            ),
             "regex of 501 chars must be rejected, got: {:?}",
             err
         );
@@ -553,7 +567,10 @@ regex = "{}"
             ok_pattern
         );
         let config = PolicyConfig::from_toml(&toml_ok).unwrap();
-        assert_eq!(config.policies[0].intent_match.regex.as_deref(), Some(ok_pattern.as_str()));
+        assert_eq!(
+            config.policies[0].intent_match.regex.as_deref(),
+            Some(ok_pattern.as_str())
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -593,17 +610,11 @@ regex = "[invalid"
             tools_overlap(&["read_file".to_string()], &[]),
             "any tool list must overlap with empty (wildcard)"
         );
-        assert!(
-            tools_overlap(&[], &[]),
-            "two wildcards must overlap"
-        );
+        assert!(tools_overlap(&[], &[]), "two wildcards must overlap");
 
         // Non-overlapping explicit lists must not overlap.
         assert!(
-            !tools_overlap(
-                &["read_file".to_string()],
-                &["write_file".to_string()]
-            ),
+            !tools_overlap(&["read_file".to_string()], &["write_file".to_string()]),
             "disjoint tool lists must not overlap"
         );
 

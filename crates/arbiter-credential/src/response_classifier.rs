@@ -37,9 +37,8 @@ pub struct DataFinding {
 
 // ── Restricted ─────────────────────────────────────────────────────────
 
-static AWS_ACCESS_KEY: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"AKIA[0-9A-Z]{16}").expect("AWS access key regex is valid")
-});
+static AWS_ACCESS_KEY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"AKIA[0-9A-Z]{16}").expect("AWS access key regex is valid"));
 
 static PRIVATE_KEY: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"-----BEGIN.*PRIVATE KEY-----").expect("private key regex is valid")
@@ -49,15 +48,13 @@ static BEARER_TOKEN_JSON: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"[Bb]earer\s+[a-zA-Z0-9._\-]{20,}"#).expect("bearer token regex is valid")
 });
 
-static GENERIC_API_KEY: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"sk-[a-zA-Z0-9]{20,}").expect("generic API key regex is valid")
-});
+static GENERIC_API_KEY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"sk-[a-zA-Z0-9]{20,}").expect("generic API key regex is valid"));
 
 // ── Confidential ───────────────────────────────────────────────────────
 
-static SSN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").expect("SSN regex is valid")
-});
+static SSN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").expect("SSN regex is valid"));
 
 static CREDIT_CARD: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b(?:\d{4}[-\s]?){3}\d{4}\b").expect("credit card regex is valid")
@@ -71,10 +68,8 @@ static EMAIL_ADDRESS: LazyLock<Regex> = LazyLock::new(|| {
 // ── Internal ───────────────────────────────────────────────────────────
 
 static INTERNAL_IP: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"\b(?:10\.\d+\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)\b",
-    )
-    .expect("internal IP regex is valid")
+    Regex::new(r"\b(?:10\.\d+\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)\b")
+        .expect("internal IP regex is valid")
 });
 
 /// All patterns paired with their sensitivity and name.
@@ -82,16 +77,40 @@ static PATTERNS: LazyLock<Vec<(DetectedSensitivity, &'static str, &'static LazyL
     LazyLock::new(|| {
         vec![
             // Restricted
-            (DetectedSensitivity::Restricted, "AWS access key", &AWS_ACCESS_KEY),
+            (
+                DetectedSensitivity::Restricted,
+                "AWS access key",
+                &AWS_ACCESS_KEY,
+            ),
             (DetectedSensitivity::Restricted, "private key", &PRIVATE_KEY),
-            (DetectedSensitivity::Restricted, "bearer token", &BEARER_TOKEN_JSON),
-            (DetectedSensitivity::Restricted, "generic API key (sk-)", &GENERIC_API_KEY),
+            (
+                DetectedSensitivity::Restricted,
+                "bearer token",
+                &BEARER_TOKEN_JSON,
+            ),
+            (
+                DetectedSensitivity::Restricted,
+                "generic API key (sk-)",
+                &GENERIC_API_KEY,
+            ),
             // Confidential
             (DetectedSensitivity::Confidential, "SSN", &SSN),
-            (DetectedSensitivity::Confidential, "credit card number", &CREDIT_CARD),
-            (DetectedSensitivity::Confidential, "email address", &EMAIL_ADDRESS),
+            (
+                DetectedSensitivity::Confidential,
+                "credit card number",
+                &CREDIT_CARD,
+            ),
+            (
+                DetectedSensitivity::Confidential,
+                "email address",
+                &EMAIL_ADDRESS,
+            ),
             // Internal
-            (DetectedSensitivity::Internal, "internal IP address", &INTERNAL_IP),
+            (
+                DetectedSensitivity::Internal,
+                "internal IP address",
+                &INTERNAL_IP,
+            ),
         ]
     });
 
@@ -157,9 +176,7 @@ mod tests {
         let body = r#"{"auth": "Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature"}"#;
         let findings = scan_response(body);
         assert!(
-            findings
-                .iter()
-                .any(|f| f.pattern_name == "bearer token"),
+            findings.iter().any(|f| f.pattern_name == "bearer token"),
             "should detect bearer tokens in JSON, findings: {:?}",
             findings
         );
@@ -186,7 +203,11 @@ mod tests {
             "should detect SSN patterns"
         );
         assert_eq!(
-            findings.iter().find(|f| f.pattern_name == "SSN").unwrap().sensitivity,
+            findings
+                .iter()
+                .find(|f| f.pattern_name == "SSN")
+                .unwrap()
+                .sensitivity,
             DetectedSensitivity::Confidential
         );
     }
@@ -232,9 +253,7 @@ mod tests {
         let body = r#"{"email": "user@example.com"}"#;
         let findings = scan_response(body);
         assert!(
-            findings
-                .iter()
-                .any(|f| f.pattern_name == "email address"),
+            findings.iter().any(|f| f.pattern_name == "email address"),
             "should detect email addresses"
         );
     }

@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 use arbiter_session::model::DataSensitivity;
 use arbiter_session::store::{CreateSessionRequest, SessionStore};
@@ -8,11 +8,7 @@ fn make_create_request() -> CreateSessionRequest {
         agent_id: uuid::Uuid::new_v4(),
         delegation_chain_snapshot: vec![],
         declared_intent: "read and analyze files".into(),
-        authorized_tools: vec![
-            "read_file".into(),
-            "list_dir".into(),
-            "get_status".into(),
-        ],
+        authorized_tools: vec!["read_file".into(), "list_dir".into(), "get_status".into()],
         time_limit: chrono::Duration::hours(1),
         call_budget: 100,
         rate_limit_per_minute: None,

@@ -13,6 +13,6 @@ pub mod stats;
 
 pub use entry::AuditEntry;
 pub use middleware::AuditCapture;
-pub use redaction::{redact_arguments, CompiledRedaction, RedactionConfig};
+pub use redaction::{CompiledRedaction, RedactionConfig, redact_arguments};
 pub use sink::{AuditSink, AuditSinkConfig};
 pub use stats::{AggregateAuditStats, AuditStats, SessionAuditStats};

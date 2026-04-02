@@ -10,6 +10,8 @@ pub mod response_classifier;
 pub use env_provider::EnvProvider;
 pub use error::CredentialError;
 pub use file_provider::FileProvider;
-pub use inject::{inject_credentials, scrub_response, scrub_response_plain, InjectedRequest};
+pub use inject::{InjectedRequest, inject_credentials, scrub_response, scrub_response_plain};
 pub use provider::{CredentialProvider, CredentialRef};
-pub use response_classifier::{scan_response as scan_response_sensitivity, DataFinding, DetectedSensitivity};
+pub use response_classifier::{
+    DataFinding, DetectedSensitivity, scan_response as scan_response_sensitivity,
+};

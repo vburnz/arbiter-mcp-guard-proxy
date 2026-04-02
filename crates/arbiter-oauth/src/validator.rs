@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use jsonwebtoken::{decode, decode_header, DecodingKey, Validation};
+use jsonwebtoken::{DecodingKey, Validation, decode, decode_header};
 
 use crate::claims::Claims;
 use crate::config::OAuthConfig;

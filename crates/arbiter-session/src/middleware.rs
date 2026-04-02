@@ -66,10 +66,7 @@ mod tests {
             }),
             403
         );
-        assert_eq!(
-            status_code_for_error(&SessionError::AlreadyClosed(id)),
-            410
-        );
+        assert_eq!(status_code_for_error(&SessionError::AlreadyClosed(id)), 410);
         assert_eq!(
             status_code_for_error(&SessionError::RateLimited {
                 session_id: id,

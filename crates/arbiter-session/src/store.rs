@@ -523,7 +523,10 @@ mod tests {
 
         // Budget must remain untouched.
         let s = store.get(session.session_id).await.unwrap();
-        assert_eq!(s.calls_made, 0, "no budget should be consumed on batch failure");
+        assert_eq!(
+            s.calls_made, 0,
+            "no budget should be consumed on batch failure"
+        );
     }
 
     #[tokio::test]
@@ -548,7 +551,10 @@ mod tests {
 
         // Budget must remain at 0.
         let s = store.get(session.session_id).await.unwrap();
-        assert_eq!(s.calls_made, 0, "no budget should be consumed on batch failure");
+        assert_eq!(
+            s.calls_made, 0,
+            "no budget should be consumed on batch failure"
+        );
     }
 
     #[tokio::test]

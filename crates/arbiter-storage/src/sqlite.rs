@@ -5,8 +5,8 @@
 //!        provides durable writes with minimal latency overhead.
 
 use async_trait::async_trait;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use sqlx::Row;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -99,7 +99,6 @@ impl SqliteStorage {
             None => Ok(serde_json::to_string(values)?),
         }
     }
-
 }
 
 // ── AgentStore implementation ───────────────────────────────────────
@@ -193,11 +192,9 @@ impl SessionStore for SqliteStorage {
     async fn insert_session(&self, session: &StoredSession) -> Result<(), StorageError> {
         let session_id = session.session_id.to_string();
         let agent_id = session.agent_id.to_string();
-        let delegation_chain =
-            self.encrypt_string_vec(&session.delegation_chain_snapshot)?;
+        let delegation_chain = self.encrypt_string_vec(&session.delegation_chain_snapshot)?;
         let declared_intent = self.encrypt_field(&session.declared_intent)?;
-        let authorized_tools =
-            self.encrypt_string_vec(&session.authorized_tools)?;
+        let authorized_tools = self.encrypt_string_vec(&session.authorized_tools)?;
         let rate_limit_per_minute = session.rate_limit_per_minute.map(|v| v as i64);
         let rate_window_start = session.rate_window_start.to_rfc3339();
         let data_sensitivity = session.data_sensitivity_ceiling.to_string();
@@ -246,11 +243,9 @@ impl SessionStore for SqliteStorage {
 
     async fn update_session(&self, session: &StoredSession) -> Result<(), StorageError> {
         let session_id = session.session_id.to_string();
-        let delegation_chain =
-            self.encrypt_string_vec(&session.delegation_chain_snapshot)?;
+        let delegation_chain = self.encrypt_string_vec(&session.delegation_chain_snapshot)?;
         let declared_intent = self.encrypt_field(&session.declared_intent)?;
-        let authorized_tools =
-            self.encrypt_string_vec(&session.authorized_tools)?;
+        let authorized_tools = self.encrypt_string_vec(&session.authorized_tools)?;
         let rate_limit_per_minute = session.rate_limit_per_minute.map(|v| v as i64);
         let rate_window_start = session.rate_window_start.to_rfc3339();
         let data_sensitivity = session.data_sensitivity_ceiling.to_string();
@@ -879,8 +874,14 @@ mod tests {
         storage.insert_session(&session).await.unwrap();
 
         let fetched = storage.get_session(session.session_id).await.unwrap();
-        assert_eq!(fetched.declared_intent, "read and analyze confidential files");
-        assert_eq!(fetched.delegation_chain_snapshot, vec!["chain-link-1", "chain-link-2"]);
+        assert_eq!(
+            fetched.declared_intent,
+            "read and analyze confidential files"
+        );
+        assert_eq!(
+            fetched.delegation_chain_snapshot,
+            vec!["chain-link-1", "chain-link-2"]
+        );
         assert_eq!(fetched.authorized_tools, vec!["read_file", "list_dir"]);
         assert_eq!(fetched.call_budget, 100);
 

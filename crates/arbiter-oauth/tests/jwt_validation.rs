@@ -5,7 +5,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use jsonwebtoken::{encode, Algorithm, DecodingKey, EncodingKey, Header};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, encode};
 use serde_json::json;
 
 use arbiter_oauth::claims::Audience;
@@ -350,8 +350,16 @@ fn alg_none_rejected() {
         let mut out = Vec::new();
         for chunk in input.chunks(3) {
             let b0 = chunk[0] as usize;
-            let b1 = if chunk.len() > 1 { chunk[1] as usize } else { 0 };
-            let b2 = if chunk.len() > 2 { chunk[2] as usize } else { 0 };
+            let b1 = if chunk.len() > 1 {
+                chunk[1] as usize
+            } else {
+                0
+            };
+            let b2 = if chunk.len() > 2 {
+                chunk[2] as usize
+            } else {
+                0
+            };
             let _ = out.write_all(&[CHARS[(b0 >> 2) & 0x3F]]);
             let _ = out.write_all(&[CHARS[((b0 << 4) | (b1 >> 4)) & 0x3F]]);
             if chunk.len() > 1 {
@@ -465,7 +473,10 @@ async fn validate_with_refresh_key_not_found_without_jwks_endpoint() {
     .unwrap();
 
     let result = validator.validate_token_with_refresh(&token).await;
-    assert!(result.is_err(), "should fail when kid not in cache and JWKS unreachable");
+    assert!(
+        result.is_err(),
+        "should fail when kid not in cache and JWKS unreachable"
+    );
     let err = result.unwrap_err();
     // After failed refresh, the retry still won't find the key.
     assert!(
@@ -571,7 +582,10 @@ fn leeway_boundary_reject_outside_window() {
     }));
 
     let result = validator.validate_token(&token);
-    assert!(result.is_err(), "token expired 70s ago should be rejected (60s leeway)");
+    assert!(
+        result.is_err(),
+        "token expired 70s ago should be rejected (60s leeway)"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -704,7 +718,10 @@ fn token_replay_not_prevented() {
     assert!(result1.is_ok(), "first use should succeed");
 
     let result2 = validator.validate_token(&token);
-    assert!(result2.is_ok(), "second use also succeeds (no replay prevention)");
+    assert!(
+        result2.is_ok(),
+        "second use also succeeds (no replay prevention)"
+    );
 
     // Verify both returned the same claims
     let claims1 = result1.unwrap();
@@ -734,7 +751,10 @@ fn config_url_validation_https_required() {
     };
 
     let result = config.validate();
-    assert!(result.is_err(), "http:// JWKS URI (non-localhost) should be rejected");
+    assert!(
+        result.is_err(),
+        "http:// JWKS URI (non-localhost) should be rejected"
+    );
     let err = result.unwrap_err();
     match &err {
         OAuthError::InsecureUrl(msg) => {

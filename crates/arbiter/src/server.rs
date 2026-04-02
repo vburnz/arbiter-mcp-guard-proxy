@@ -19,7 +19,7 @@ use tokio::net::TcpListener;
 use tokio::signal;
 
 use crate::config::ArbiterConfig;
-use crate::handler::{handle_request, ArbiterState};
+use crate::handler::{ArbiterState, handle_request};
 
 /// Run the proxy and admin API concurrently. Blocks until shutdown signal.
 pub async fn run(config: Arc<ArbiterConfig>) -> anyhow::Result<()> {

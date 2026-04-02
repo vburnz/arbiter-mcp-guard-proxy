@@ -12,7 +12,7 @@ use tokio::signal;
 
 use crate::config::ProxyConfig;
 use crate::middleware::MiddlewareChain;
-use crate::proxy::{build_audit, handle_request, ProxyState};
+use crate::proxy::{ProxyState, build_audit, handle_request};
 
 /// Run the proxy server. Blocks until a shutdown signal is received.
 pub async fn run(config: ProxyConfig) -> anyhow::Result<()> {

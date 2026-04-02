@@ -1,26 +1,18 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
-use arbiter_behavior::{
-    classify_operation, AnomalyConfig, AnomalyDetector, OperationType,
-};
+use arbiter_behavior::{AnomalyConfig, AnomalyDetector, OperationType, classify_operation};
 
 fn bench_classify_operation(c: &mut Criterion) {
     c.bench_function("classify_operation_read", |b| {
-        b.iter(|| {
-            classify_operation(black_box("tools/call"), black_box(Some("read_file")))
-        })
+        b.iter(|| classify_operation(black_box("tools/call"), black_box(Some("read_file"))))
     });
 
     c.bench_function("classify_operation_write", |b| {
-        b.iter(|| {
-            classify_operation(black_box("tools/call"), black_box(Some("write_file")))
-        })
+        b.iter(|| classify_operation(black_box("tools/call"), black_box(Some("write_file"))))
     });
 
     c.bench_function("classify_operation_admin", |b| {
-        b.iter(|| {
-            classify_operation(black_box("tools/call"), black_box(Some("admin_users")))
-        })
+        b.iter(|| classify_operation(black_box("tools/call"), black_box(Some("admin_users"))))
     });
 
     c.bench_function("classify_operation_method_level", |b| {

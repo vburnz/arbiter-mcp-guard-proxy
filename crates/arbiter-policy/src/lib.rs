@@ -12,7 +12,7 @@ pub mod model;
 pub mod watcher;
 
 pub use error::PolicyError;
-pub use eval::{evaluate, evaluate_explained, Decision, EvalContext, EvalResult, PolicyTrace};
+pub use eval::{Decision, EvalContext, EvalResult, PolicyTrace, evaluate, evaluate_explained};
 pub use model::{
     Disposition, Effect, Policy, PolicyConfig, PolicyDiagnostic, PolicyId, ValidationResult,
 };

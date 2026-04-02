@@ -1,6 +1,6 @@
 use proptest::prelude::*;
 
-use arbiter_mcp::{parse_mcp_body, ParseResult};
+use arbiter_mcp::{ParseResult, parse_mcp_body};
 
 /// Strategy that generates valid JSON-RPC 2.0 "tools/call" request bodies.
 fn valid_tools_call_body(tool_name: String) -> Vec<u8> {

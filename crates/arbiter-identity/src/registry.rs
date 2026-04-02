@@ -136,10 +136,10 @@ impl AgentRegistry for InMemoryRegistry {
             .ok_or(IdentityError::AgentNotFound(id))?;
         // Enforce agent expiry on lookup.
         // Previously, expired agents were still returned from the registry.
-        if let Some(expires_at) = agent.expires_at {
-            if Utc::now() > expires_at {
-                return Err(IdentityError::AgentDeactivated(id));
-            }
+        if let Some(expires_at) = agent.expires_at
+            && Utc::now() > expires_at
+        {
+            return Err(IdentityError::AgentDeactivated(id));
         }
         Ok(agent)
     }
@@ -269,10 +269,10 @@ impl AgentRegistry for InMemoryRegistry {
         // Verify all agents in the chain are active
         let agents = self.agents.read().await;
         for link in &chain {
-            if let Some(agent) = agents.get(&link.from) {
-                if !agent.active {
-                    return Err(IdentityError::AgentDeactivated(link.from));
-                }
+            if let Some(agent) = agents.get(&link.from)
+                && !agent.active
+            {
+                return Err(IdentityError::AgentDeactivated(link.from));
             }
         }
 
@@ -330,13 +330,13 @@ impl AgentRegistry for InMemoryRegistry {
 
             for child in children {
                 let mut agents = self.agents.write().await;
-                if let Some(agent) = agents.get_mut(&child) {
-                    if agent.active {
-                        agent.active = false;
-                        tracing::info!(agent_id = %child, cascade_from = %id, "cascade deactivated agent");
-                        deactivated.push(child);
-                        to_process.push(child);
-                    }
+                if let Some(agent) = agents.get_mut(&child)
+                    && agent.active
+                {
+                    agent.active = false;
+                    tracing::info!(agent_id = %child, cascade_from = %id, "cascade deactivated agent");
+                    deactivated.push(child);
+                    to_process.push(child);
                 }
             }
         }
@@ -724,12 +724,7 @@ mod tests {
         // Create chain: A->B->C->...->J (9 delegation links)
         for i in 0..9 {
             registry
-                .create_delegation(
-                    agents[i].id,
-                    agents[i + 1].id,
-                    vec!["read".into()],
-                    None,
-                )
+                .create_delegation(agents[i].id, agents[i + 1].id, vec!["read".into()], None)
                 .await
                 .unwrap();
         }
@@ -817,12 +812,7 @@ mod tests {
         // Create chain: agent[0] -> agent[1] -> ... -> agent[49] (49 delegation links)
         for i in 0..(chain_len - 1) {
             registry
-                .create_delegation(
-                    agents[i].id,
-                    agents[i + 1].id,
-                    vec!["read".into()],
-                    None,
-                )
+                .create_delegation(agents[i].id, agents[i + 1].id, vec!["read".into()], None)
                 .await
                 .unwrap();
         }

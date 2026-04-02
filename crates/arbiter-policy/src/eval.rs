@@ -214,17 +214,17 @@ pub fn authorized_tools(config: &PolicyConfig, ctx: &EvalContext) -> Vec<String>
 /// Check agent matching criteria.
 fn matches_agent(agent_match: &crate::model::AgentMatch, ctx: &EvalContext) -> bool {
     // If agent_id is specified, it must match exactly.
-    if let Some(required_id) = agent_match.agent_id {
-        if ctx.agent.id != required_id {
-            return false;
-        }
+    if let Some(required_id) = agent_match.agent_id
+        && ctx.agent.id != required_id
+    {
+        return false;
     }
 
     // If trust_level is specified, the agent must be at or above that level.
-    if let Some(required_level) = agent_match.trust_level {
-        if !trust_level_gte(ctx.agent.trust_level, required_level) {
-            return false;
-        }
+    if let Some(required_level) = agent_match.trust_level
+        && !trust_level_gte(ctx.agent.trust_level, required_level)
+    {
+        return false;
     }
 
     // All required capabilities must be present.
@@ -239,10 +239,10 @@ fn matches_agent(agent_match: &crate::model::AgentMatch, ctx: &EvalContext) -> b
 
 /// Check principal matching criteria.
 fn matches_principal(principal_match: &crate::model::PrincipalMatch, ctx: &EvalContext) -> bool {
-    if let Some(ref required_sub) = principal_match.sub {
-        if ctx.principal_sub != *required_sub {
-            return false;
-        }
+    if let Some(ref required_sub) = principal_match.sub
+        && ctx.principal_sub != *required_sub
+    {
+        return false;
     }
 
     if !principal_match.groups.is_empty()
@@ -346,21 +346,22 @@ fn matches_parameter_constraints(
             // Constraints must reject values whose type doesn't match what the
             // constraint expects. Previously, sending a string where a number was
             // expected (or vice versa) silently bypassed the constraint.
-            let has_numeric_constraint = constraint.max_value.is_some() || constraint.min_value.is_some();
+            let has_numeric_constraint =
+                constraint.max_value.is_some() || constraint.min_value.is_some();
             let has_string_constraint = !constraint.allowed_values.is_empty();
 
             // Check numeric bounds.
             if has_numeric_constraint {
                 if let Some(num) = value.as_f64() {
-                    if let Some(max) = constraint.max_value {
-                        if num > max {
-                            return false;
-                        }
+                    if let Some(max) = constraint.max_value
+                        && num > max
+                    {
+                        return false;
                     }
-                    if let Some(min) = constraint.min_value {
-                        if num < min {
-                            return false;
-                        }
+                    if let Some(min) = constraint.min_value
+                        && num < min
+                    {
+                        return false;
                     }
                 } else {
                     // Value is not a number but constraint requires numeric bounds.
@@ -866,9 +867,7 @@ mod tests {
     /// of the agent's trust level, intent, or requested tool.
     #[test]
     fn deny_by_default_empty_policy_set() {
-        let config = PolicyConfig {
-            policies: vec![],
-        };
+        let config = PolicyConfig { policies: vec![] };
 
         // Try every trust level — all must be denied.
         for trust in [
