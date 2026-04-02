@@ -35,11 +35,15 @@ jobs:
 
       - name: Assemble site
         run: |
-          mkdir _site
-          cp docs/index.html docs/case-study.html _site/
+          mkdir -p _site/firewall
+          cp docs/index.html _site/
+          cp docs/firewall/index.html _site/firewall/
+          cp docs/case-study.html _site/
+          cp docs/CNAME _site/
           cp -r docs/styles _site/styles
           cp -r docs/demos _site/demos
           cp -r docs/sphinx/_build/html _site/docs
+          touch _site/.nojekyll
 
       - uses: actions/upload-pages-artifact@v3
         with:
