@@ -28,3 +28,6 @@ exclude-files = [
 
 # Exclude test code from coverage
 ignore-tests = true
+
+# Per-test timeout (seconds) — property tests under instrumentation need headroom
+timeout = 120
