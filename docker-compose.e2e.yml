@@ -1,0 +1,105 @@
+# ═══════════════════════════════════════════════════════════════════
+# Arbiter: Docker E2E Verification
+# ═══════════════════════════════════════════════════════════════════
+#
+# Runs all 10 security demo scenarios against a containerized
+# Arbiter deployment. Builds from source, deploys in containers,
+# and verifies every enforcement mechanism end-to-end.
+#
+# Usage:
+#   docker compose -f docker-compose.e2e.yml up --build \
+#     --abort-on-container-exit test-runner
+#
+# Architecture:
+#   mcp-echo        Clean MCP echo upstream (demos 01-09)
+#   tainted-echo    Alternating clean/tainted upstream (demo 10)
+#   arbiter         Superset config for demos 01-09
+#   arbiter-demo10  Demo 10 config with response inspection
+#   test-runner     Runs all 10 test scenarios, exits 0 on success
+
+services:
+  # ── Clean MCP Echo Server (demos 01-09) ──────────────────────────
+  mcp-echo:
+    image: python:3.12-alpine
+    command: ["python3", "/app/echo-server.py", "8081"]
+    volumes:
+      - ./docker/echo-server.py:/app/echo-server.py:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health')\""]
+      interval: 3s
+      timeout: 2s
+      retries: 5
+
+  # ── Tainted MCP Echo Server (demo 10) ────────────────────────────
+  tainted-echo:
+    image: python:3.12-alpine
+    command: ["python3", "/app/tainted-echo-server.py", "8081"]
+    volumes:
+      - ./docker/e2e/tainted-echo-server.py:/app/tainted-echo-server.py:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health')\""]
+      interval: 3s
+      timeout: 2s
+      retries: 5
+
+  # ── Arbiter Gateway (demos 01-09) ────────────────────────────────
+  arbiter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - arbiter
+      - --config
+      - /etc/arbiter/arbiter.toml
+      - --log-level
+      - info
+    volumes:
+      - ./docker/e2e/arbiter-e2e.toml:/etc/arbiter/arbiter.toml:ro
+    depends_on:
+      mcp-echo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  # ── Arbiter Gateway (demo 10: response inspection) ───────────────
+  arbiter-demo10:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - arbiter
+      - --config
+      - /etc/arbiter/arbiter.toml
+      - --log-level
+      - info
+    volumes:
+      - ./docker/e2e/arbiter-demo10.toml:/etc/arbiter/arbiter.toml:ro
+    depends_on:
+      tainted-echo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  # ── E2E Test Runner ──────────────────────────────────────────────
+  test-runner:
+    build:
+      context: ./docker/e2e
+      dockerfile: Dockerfile.test-runner
+    environment:
+      ARBITER_PROXY_URL: "http://arbiter:8080"
+      ARBITER_ADMIN_URL: "http://arbiter:3000"
+      ARBITER_DEMO10_PROXY_URL: "http://arbiter-demo10:8080"
+      ARBITER_DEMO10_ADMIN_URL: "http://arbiter-demo10:3000"
+    depends_on:
+      arbiter:
+        condition: service_healthy
+      arbiter-demo10:
+        condition: service_healthy

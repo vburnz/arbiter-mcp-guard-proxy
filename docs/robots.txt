@@ -1,0 +1,7 @@
+# Arbiter: IAM Gateway for AI Agents
+# https://cyrenei.github.io/arbiter-mcp-firewall/
+
+User-agent: *
+Allow: /
+
+Sitemap: https://cyrenei.github.io/arbiter-mcp-firewall/sitemap.xml

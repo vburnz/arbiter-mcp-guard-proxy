@@ -1,0 +1,58 @@
+name: Weekly Pulse
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  pulse:
+    runs-on: ubuntu-latest
+    env:
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect metrics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p pulse
+          DATE=$(date +%Y-%m-%d)
+
+          STARS=$(gh api "repos/${REPO}" --jq '.stargazers_count')
+          FORKS=$(gh api "repos/${REPO}" --jq '.forks_count')
+          WATCHERS=$(gh api "repos/${REPO}" --jq '.subscribers_count')
+          ISSUES=$(gh api "repos/${REPO}" --jq '.open_issues_count')
+          VIEWS=$(gh api "repos/${REPO}/traffic/views" --jq '.count' 2>/dev/null || echo "n/a")
+          CLONES=$(gh api "repos/${REPO}/traffic/clones" --jq '.count' 2>/dev/null || echo "n/a")
+
+          cat > "pulse/${DATE}.md" << EOF
+          # Pulse: ${DATE}
+
+          | Metric | Value |
+          |--------|-------|
+          | Stars | ${STARS} |
+          | Forks | ${FORKS} |
+          | Watchers | ${WATCHERS} |
+          | Open Issues | ${ISSUES} |
+          | Views (14d) | ${VIEWS} |
+          | Clones (14d) | ${CLONES} |
+          EOF
+
+          if [ ! -f pulse/history.csv ]; then
+            echo "date,stars,forks,watchers,issues,views,clones" > pulse/history.csv
+          fi
+          echo "${DATE},${STARS},${FORKS},${WATCHERS},${ISSUES},${VIEWS},${CLONES}" >> pulse/history.csv
+
+      - name: Commit pulse
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pulse/
+          git diff --staged --quiet && exit 0
+          git commit -m "pulse: $(date +%Y-%m-%d) weekly metrics"
+          git push

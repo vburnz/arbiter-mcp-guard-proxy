@@ -1,0 +1,63 @@
+name: Nightly Performance & Deep Tests
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # 03:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run benchmarks
+        run: cargo bench --workspace -- --output-format bencher 2>&1 | tee benchmark-results.txt
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.txt
+
+  property-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run property-based tests (extended)
+        env:
+          PROPTEST_CASES: 1000
+        run: |
+          cargo test -p arbiter-mcp --test property_tests
+          cargo test -p arbiter-session --test property_tests
+          cargo test -p arbiter-policy --test property_tests
+          cargo test -p arbiter-audit --test property_tests
+          cargo test -p arbiter-behavior --test property_tests
+
+  security-scenarios:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run security demo scenarios
+        run: cargo test -p arbiter --test security_scenarios -- --ignored
+
+  load-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run load test
+        env:
+          LOAD_TEST_CONNECTIONS: 100
+          LOAD_TEST_REQUESTS_PER_CONN: 50
+        run: cargo test -p arbiter --test load_test -- --ignored --nocapture 2>&1 | tee load-test-results.txt
+      - name: Upload load test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: load-test-results.txt

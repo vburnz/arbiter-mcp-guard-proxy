@@ -1,0 +1,30 @@
+[default]
+# Workspace coverage configuration for arbiter-gateway
+# Run: cargo tarpaulin --config tarpaulin.toml
+
+# Target all workspace crates
+workspace = true
+
+# Coverage mode
+count = false
+run-types = ["Lines"]
+
+# Fail if coverage drops below 90%
+fail-under = 90
+
+# Verbose output
+verbose = true
+
+# Output configuration
+output-dir = "target/tarpaulin-coverage"
+out = ["Html", "Json", "Lcov"]
+
+# Exclude files from coverage measurement
+exclude-files = [
+    "tests/*",
+    "benches/*",
+    "*/main.rs",
+]
+
+# Exclude test code from coverage
+ignore-tests = true

@@ -1,0 +1,26 @@
+[package]
+name = "arbiter-behavior"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Operation-type drift detection for Arbiter task sessions"
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+arbiter-mcp = { path = "../arbiter-mcp" }
+thiserror = "2"
+tokio = { version = "1", features = ["sync"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+criterion = "0.5"
+proptest = "1"
+tokio = { version = "1", features = ["rt", "macros"] }
+
+[[bench]]
+name = "behavior_detection"
+harness = false

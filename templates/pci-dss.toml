@@ -1,0 +1,162 @@
+# Arbiter Policy Template: PCI DSS Compliance
+#
+# PCI DSS (Payment Card Industry Data Security Standard) protects
+# cardholder data and sensitive authentication data. From an AI agent
+# governance perspective, the key requirements are:
+#
+#   - No credential access: tools that expose passwords, API keys,
+#     secrets, or tokens are categorically denied (Req. 2, 8).
+#   - Cardholder data protection: tools that access card numbers,
+#     CVVs, or PINs require escalation for human review (Req. 3).
+#   - Transaction monitoring: read access for auditors, write access
+#     only for agents with "payment-processor" capability (Req. 10).
+#   - Amount limits: transaction amounts are capped to prevent
+#     unauthorized large transfers (Req. 7, least privilege).
+#   - Network segmentation: restrict tool access by trust level
+#     to mirror network segmentation controls (Req. 1).
+#
+# Usage:
+#   [policy]
+#   file = "templates/pci-dss.toml"
+#
+# Pair with these config settings for full PCI DSS coverage:
+#   [sessions]
+#   require_session = true
+#   [audit]
+#   enabled = true
+#   redaction_patterns = ["card_number", "cvv", "pin", "expiry",
+#                         "password", "secret", "token", "key"]
+
+# ---------------------------------------------------------------------------
+# Policy 1: Deny all credential and secret access
+# ---------------------------------------------------------------------------
+# No agent, regardless of trust level, may invoke tools that access
+# credentials, passwords, keys, secrets, or tokens. This enforces
+# PCI DSS Requirement 2 (do not use vendor-supplied defaults) and
+# Requirement 8 (identify and authenticate access).
+[[policies]]
+id = "pci-deny-credential-access"
+effect = "deny"
+allowed_tools = [
+    "get_credentials",
+    "read_password",
+    "list_api_keys",
+    "get_secret",
+    "read_token",
+    "export_private_key",
+    "dump_credentials",
+]
+priority = 300
+
+# ---------------------------------------------------------------------------
+# Policy 2: Allow transaction read access for auditors
+# ---------------------------------------------------------------------------
+# Verified agents belonging to the "auditors" group may read transaction
+# records for monitoring and compliance review purposes. Satisfies
+# PCI DSS Requirement 10 (track and monitor all access to network
+# resources and cardholder data).
+[[policies]]
+id = "pci-allow-transaction-read"
+effect = "allow"
+allowed_tools = [
+    "query_transactions",
+    "get_transaction_details",
+    "list_settlements",
+    "get_payment_history",
+    "generate_transaction_report",
+]
+priority = 80
+
+[policies.agent_match]
+trust_level = "verified"
+
+[policies.principal_match]
+groups = ["auditors", "compliance"]
+
+# ---------------------------------------------------------------------------
+# Policy 3: Deny transaction write without payment-processor capability
+# ---------------------------------------------------------------------------
+# Transaction write operations are denied by default. Only agents with
+# the "payment-processor" capability (granted in Policy 4) may process
+# payments. This enforces PCI DSS Requirement 7 (restrict access to
+# cardholder data by business need-to-know).
+[[policies]]
+id = "pci-deny-transaction-write"
+effect = "deny"
+allowed_tools = [
+    "process_payment",
+    "create_refund",
+    "initiate_transfer",
+    "modify_transaction",
+    "void_transaction",
+    "adjust_balance",
+]
+priority = 100
+
+# ---------------------------------------------------------------------------
+# Policy 4: Allow transaction write for payment processors (with limits)
+# ---------------------------------------------------------------------------
+# Agents with "payment-processor" capability and "trusted" trust level
+# may process transactions, subject to amount caps. Individual
+# transactions are capped at $10,000 and must have a minimum of $0.01.
+# This enforces PCI DSS Requirement 7 (least privilege) with
+# quantitative guardrails.
+[[policies]]
+id = "pci-allow-payment-processing"
+effect = "allow"
+allowed_tools = [
+    "process_payment",
+    "create_refund",
+    "initiate_transfer",
+    "void_transaction",
+]
+priority = 150
+
+[policies.agent_match]
+trust_level = "trusted"
+capabilities = ["payment-processor"]
+
+[[policies.parameter_constraints]]
+key = "amount"
+max_value = 10000.0
+min_value = 0.01
+
+[[policies.parameter_constraints]]
+key = "currency"
+allowed_values = ["USD", "EUR", "GBP", "CAD", "AUD"]
+
+# ---------------------------------------------------------------------------
+# Policy 5: Escalate access to cardholder data
+# ---------------------------------------------------------------------------
+# Any tool that accesses primary account numbers (PANs), CVVs, or
+# cardholder names requires human-in-the-loop approval. This satisfies
+# PCI DSS Requirement 3 (protect stored cardholder data) by ensuring
+# a human reviews every access to sensitive authentication data.
+[[policies]]
+id = "pci-escalate-cardholder-data"
+effect = "escalate"
+allowed_tools = [
+    "get_card_details",
+    "read_cardholder_info",
+    "lookup_pan",
+    "verify_card",
+]
+priority = 250
+
+# ---------------------------------------------------------------------------
+# Policy 6: Deny modification of audit/security logs
+# ---------------------------------------------------------------------------
+# PCI DSS Requirement 10.5 mandates that audit trails are secured
+# against modification. No agent may alter, delete, or disable
+# logging infrastructure.
+[[policies]]
+id = "pci-deny-log-tampering"
+effect = "deny"
+allowed_tools = [
+    "delete_audit_logs",
+    "modify_audit_logs",
+    "disable_logging",
+    "truncate_logs",
+    "clear_history",
+]
+priority = 300

@@ -1,0 +1,157 @@
+# Arbiter Policy Template: EU AI Act Compliance
+#
+# The EU AI Act (Regulation (EU) 2024/1689) establishes a risk-based
+# framework for AI systems operating in the European Union. From an
+# AI agent governance perspective, the key requirements are:
+#
+#   - Logging and traceability: all tool invocations must be recorded
+#     (Arbiter default) for the mandatory audit trail (Article 12).
+#   - Human oversight: high-risk AI use cases require human-in-the-loop
+#     approval before autonomous action (Article 14).
+#   - Transparency: agents must declare their intent and capabilities;
+#     tool calls related to decisions affecting persons require
+#     explainability (Article 13).
+#   - Prohibited practices: social scoring, real-time biometric
+#     identification (without exemptions), and manipulative AI are
+#     forbidden (Article 5).
+#   - High-risk classification: AI systems used in employment, credit,
+#     law enforcement, education, and essential services are subject
+#     to enhanced controls (Annex III).
+#
+# Usage:
+#   [policy]
+#   file = "templates/eu-ai-act.toml"
+#
+# Pair with these config settings for full EU AI Act coverage:
+#   [sessions]
+#   require_session = true
+#   [audit]
+#   enabled = true
+#   [metrics]
+#   enabled = true
+
+# ---------------------------------------------------------------------------
+# Policy 1: Allow general-purpose tools with transparency
+# ---------------------------------------------------------------------------
+# General-purpose AI tools (search, summarize, translate, generate) are
+# allowed for verified agents who declare a recognized intent. This
+# satisfies Article 52 transparency obligations; the intent declaration
+# ensures the purpose of each tool invocation is recorded.
+[[policies]]
+id = "euai-allow-general-purpose"
+effect = "allow"
+allowed_tools = [
+    "search",
+    "summarize",
+    "translate",
+    "generate_text",
+    "analyze_data",
+    "query",
+    "list_records",
+]
+priority = 10
+
+[policies.agent_match]
+trust_level = "basic"
+
+# ---------------------------------------------------------------------------
+# Policy 2: Escalate high-risk tool categories
+# ---------------------------------------------------------------------------
+# Tools related to employment decisions, creditworthiness assessment,
+# law enforcement, and access to essential services are classified as
+# high-risk under Annex III and require human oversight (Article 14).
+# These are escalated for mandatory human review before execution.
+[[policies]]
+id = "euai-escalate-high-risk"
+effect = "escalate"
+allowed_tools = [
+    "evaluate_candidate",
+    "score_creditworthiness",
+    "assess_risk_profile",
+    "make_eligibility_decision",
+    "generate_sentencing_recommendation",
+    "rank_applicants",
+]
+priority = 200
+
+[policies.intent_match]
+regex = "(?i)(hiring|employment|recruitment|credit|loan|scoring|law enforcement|criminal|sentencing|eligibility|benefits|education admission)"
+
+# ---------------------------------------------------------------------------
+# Policy 3: Deny autonomous decision-making without human review
+# ---------------------------------------------------------------------------
+# Tools that make binding decisions affecting natural persons are denied
+# unless the agent has "human-oversight-confirmed" capability, indicating
+# a human has approved the decision loop. This enforces Article 14
+# (human oversight measures for high-risk AI systems).
+[[policies]]
+id = "euai-deny-autonomous-decisions"
+effect = "deny"
+allowed_tools = [
+    "approve_application",
+    "reject_application",
+    "terminate_account",
+    "issue_penalty",
+    "assign_score",
+    "make_final_decision",
+]
+priority = 250
+
+# ---------------------------------------------------------------------------
+# Policy 4: Allow decisions with human-in-the-loop confirmation
+# ---------------------------------------------------------------------------
+# When an agent has the "human-oversight-confirmed" capability (set after
+# a human approves the decision workflow), decision tools are allowed.
+# This is the explicit override for Policy 3, with higher specificity
+# due to the capability requirement.
+[[policies]]
+id = "euai-allow-decisions-with-oversight"
+effect = "allow"
+allowed_tools = [
+    "approve_application",
+    "reject_application",
+    "terminate_account",
+    "issue_penalty",
+    "assign_score",
+    "make_final_decision",
+]
+priority = 270
+
+[policies.agent_match]
+trust_level = "verified"
+capabilities = ["human-oversight-confirmed"]
+
+# ---------------------------------------------------------------------------
+# Policy 5: Deny prohibited AI practices
+# ---------------------------------------------------------------------------
+# Article 5 of the EU AI Act prohibits certain AI practices outright:
+# social scoring, manipulative techniques, exploitation of vulnerabilities,
+# and (most) real-time biometric identification. These tools are denied
+# unconditionally at the highest priority.
+[[policies]]
+id = "euai-deny-prohibited-practices"
+effect = "deny"
+allowed_tools = [
+    "social_score",
+    "manipulate_behavior",
+    "exploit_vulnerability",
+    "realtime_biometric_identify",
+    "subliminal_influence",
+    "emotion_inference_workplace",
+]
+priority = 400
+
+# ---------------------------------------------------------------------------
+# Policy 6: Escalate profiling and classification of persons
+# ---------------------------------------------------------------------------
+# Any tool invocation whose declared intent involves profiling, scoring,
+# or classifying natural persons requires escalation. This catches
+# edge cases not covered by explicit tool lists and satisfies the
+# risk management obligations under Article 9.
+[[policies]]
+id = "euai-escalate-person-classification"
+effect = "escalate"
+priority = 180
+
+[policies.intent_match]
+regex = "(?i)(profil(e|ing)|classif(y|ication)\\s+(of\\s+)?(person|people|individual|citizen|user|customer)|biometric|scoring\\s+(of\\s+)?(person|people|individual)|categori(ze|zation)\\s+(of\\s+)?(person|people))"

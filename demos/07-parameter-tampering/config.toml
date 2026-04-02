@@ -1,0 +1,40 @@
+# Demo 07: Parameter Tampering
+# Policy allows generate_text but constrains max_tokens to 1000.
+
+[proxy]
+listen_addr = "127.0.0.1"
+listen_port = 8080
+upstream_url = "http://127.0.0.1:8081"
+require_session = true
+strict_mcp = true
+
+[sessions]
+default_time_limit_secs = 3600
+default_call_budget = 100
+
+[audit]
+enabled = true
+
+[metrics]
+enabled = true
+
+[admin]
+listen_addr = "127.0.0.1"
+listen_port = 3000
+api_key = "demo-key"
+signing_secret = "demo-secret"
+token_expiry_secs = 3600
+
+# Allow generate_text only when max_tokens <= 1000 and temperature >= 0.
+[[policy.policies]]
+id = "allow-generate-bounded"
+effect = "allow"
+allowed_tools = ["generate_text"]
+[[policy.policies.parameter_constraints]]
+key = "max_tokens"
+max_value = 1000.0
+min_value = 1.0
+[[policy.policies.parameter_constraints]]
+key = "temperature"
+max_value = 2.0
+min_value = 0.0

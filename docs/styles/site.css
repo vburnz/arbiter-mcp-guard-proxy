@@ -1,0 +1,223 @@
+/* Arbiter: Project Site
+   Dark mode, aligned with Furo (Sphinx theme) design tokens.
+   Light, fast, honest. No frameworks, no build step. */
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+    sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  color: #cfd0d0;
+  background: #131416;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Skip Link ─────────────────────────────────────────────── */
+
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  background: #3d94ff;
+  color: #fff;
+  padding: 8px 16px;
+  z-index: 1000;
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+.skip-link:focus { top: 0; }
+
+/* ── Layout ────────────────────────────────────────────────── */
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ── Navigation ────────────────────────────────────────────── */
+
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(19, 20, 22, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid #303335;
+  padding: 12px 0;
+}
+nav .inner {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+nav .logo {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #cfd0d0;
+  text-decoration: none;
+}
+nav .logo:hover { color: #cfd0d0; text-decoration: none; }
+nav .links {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+nav .links a {
+  color: #9ca0a5;
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+nav .links a:hover { color: #cfd0d0; }
+nav .links .sponsor {
+  color: #3d94ff;
+  font-weight: 600;
+}
+
+/* ── Typography ────────────────────────────────────────────── */
+
+h1 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+  line-height: 1.3;
+  color: #cfd0d0;
+}
+h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 40px;
+  margin-bottom: 16px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #303335;
+  color: #cfd0d0;
+}
+h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 24px;
+  margin-bottom: 8px;
+  color: #cfd0d0;
+}
+p {
+  color: #9ca0a5;
+  margin-bottom: 16px;
+}
+.tagline {
+  font-size: 1.1rem;
+  color: #9ca0a5;
+  margin-bottom: 20px;
+}
+a {
+  color: #5ca5ff;
+  text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+/* ── Info Strip ────────────────────────────────────────────── */
+
+.info-strip {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: #81868d;
+  margin-bottom: 24px;
+  padding: 10px 0;
+  border-top: 1px solid #303335;
+  border-bottom: 1px solid #303335;
+}
+
+/* ── Code Blocks ───────────────────────────────────────────── */
+
+pre {
+  background: #1a1c1e;
+  border: 1px solid #303335;
+  border-radius: 4px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  font-family: "SFMono-Regular", Menlo, Consolas, Monaco, "Liberation Mono",
+    "Lucida Console", monospace;
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: #cfd0d0;
+  margin-bottom: 16px;
+}
+code {
+  font-family: "SFMono-Regular", Menlo, Consolas, Monaco, "Liberation Mono",
+    "Lucida Console", monospace;
+  font-size: 0.85rem;
+  background: #1a1c1e;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* ── Doc Links ─────────────────────────────────────────────── */
+
+.doc-links {
+  list-style: none;
+  margin-bottom: 16px;
+}
+.doc-links li {
+  padding: 6px 0;
+  line-height: 1.5;
+}
+.doc-links a {
+  font-weight: 500;
+}
+.doc-links .desc {
+  color: #81868d;
+  font-size: 0.875rem;
+}
+
+/* ── Pipeline List ─────────────────────────────────────────── */
+
+main ol {
+  padding-left: 20px;
+  margin-bottom: 16px;
+}
+main ol li {
+  padding: 3px 0;
+  color: #9ca0a5;
+}
+main ol li strong {
+  color: #cfd0d0;
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+
+footer {
+  border-top: 1px solid #303335;
+  margin-top: 48px;
+  padding: 20px 0;
+  font-size: 0.8rem;
+  color: #81868d;
+  text-align: center;
+}
+footer a { color: #5ca5ff; }
+
+/* ── Responsive ────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  h1 { font-size: 1.5rem; }
+  .info-strip { gap: 12px; }
+}
+
+/* ── Accessibility ─────────────────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid #3d94ff;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; }
+}

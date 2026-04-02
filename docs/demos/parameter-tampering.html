@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Input Validation for AI Agent Tool Parameters | Arbiter Security</title>
+  <meta name="description" content="How Arbiter enforces per-parameter constraints on AI agent tool calls. An agent exceeds max_tokens limits and is blocked by policy-level parameter validation.">
+  <meta name="keywords" content="parameter tampering, AI agent input validation, tool parameter constraints, MCP security, max_tokens limit, policy constraints, agent abuse">
+  <meta property="og:title" content="Input Validation for AI Agent Tool Parameters | Arbiter">
+  <meta property="og:description" content="An agent calls generate_text with max_tokens=50000 (limit is 1000). Arbiter's parameter constraints catch it at the policy layer: 403 POLICY_DENIED.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://cyrenei.github.io/arbiter-mcp-firewall/demos/parameter-tampering">
+  <link rel="canonical" href="https://cyrenei.github.io/arbiter-mcp-firewall/demos/parameter-tampering">
+  <link rel="stylesheet" href="../styles/a11y.css">
+  <style>
+    :root {
+      --bg: #0a0e17;
+      --surface: #111827;
+      --surface-alt: #1a2235;
+      --border: #1e293b;
+      --border-bright: #334155;
+      --text: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-dim: #64748b;
+      --accent: #3b82f6;
+      --accent-bright: #60a5fa;
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.12);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.12);
+      --purple: #a78bfa;
+      --cyan: #22d3ee;
+      --mono: "SF Mono", "Fira Code", "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; -webkit-font-smoothing: antialiased; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+    .narrow { max-width: 720px; margin: 0 auto; }
+    section { padding: 80px 0; }
+    section + section { border-top: 1px solid var(--border); }
+
+    h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.15; letter-spacing: -0.03em; }
+    h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 24px; }
+    h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; }
+    p { color: var(--text-secondary); margin-bottom: 16px; }
+    .lead { font-size: 1.15rem; line-height: 1.8; }
+    a { color: var(--accent-bright); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(10, 14, 23, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 14px 0; }
+    nav .container { display: flex; align-items: center; justify-content: space-between; }
+    nav .logo { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+    nav .logo span { color: var(--accent-bright); }
+    nav .links { display: flex; gap: 24px; }
+    nav .links a { color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; }
+    nav .links a:hover { color: var(--text); text-decoration: none; }
+
+    .hero { padding: 100px 0 60px; text-align: center; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; background: radial-gradient(circle, rgba(239,68,68,0.06) 0%, transparent 70%); pointer-events: none; }
+    .hero .demo-num { font-family: var(--mono); font-size: 0.78rem; color: var(--red); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 16px; display: block; }
+    .hero h1 { margin-bottom: 20px; }
+    .hero .subtitle { font-size: 1.15rem; color: var(--text-secondary); max-width: 620px; margin: 0 auto; line-height: 1.8; }
+
+    .code-block { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 24px 0; }
+    .code-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: var(--surface-alt); border-bottom: 1px solid var(--border); font-size: 0.8rem; color: var(--text-dim); }
+    .code-header .filename { font-family: var(--mono); font-weight: 600; color: var(--text-secondary); }
+    .code-body { padding: 18px; overflow-x: auto; font-family: var(--mono); font-size: 0.82rem; line-height: 1.65; color: var(--text-secondary); }
+    .code-body .line { display: block; white-space: pre; }
+    .syn-comment { color: var(--text-dim); font-style: italic; }
+    .syn-str { color: var(--green); }
+    .syn-key { color: var(--purple); }
+    .syn-red { color: var(--red); font-weight: 600; }
+    .syn-green { color: var(--green); font-weight: 600; }
+
+    .defense-box { background: var(--surface); border: 1px solid rgba(34, 197, 94, 0.2); border-left: 4px solid var(--green); border-radius: 0 10px 10px 0; padding: 24px 28px; margin: 24px 0; }
+    .defense-box h3 { color: var(--green); margin-bottom: 8px; }
+
+    .nav-demos { display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); }
+    .nav-demos a { font-size: 0.9rem; font-weight: 500; }
+
+    footer { text-align: center; padding: 28px 0; color: var(--text-dim); font-size: 0.82rem; border-top: 1px solid var(--border); }
+    footer a { color: var(--accent); }
+
+    .reveal { opacity: 0; transform: translateY(28px); transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+<a href="#main" class="skip-nav">Skip to main content</a>
+
+<nav>
+  <div class="container">
+    <a href="../index.html" class="logo" style="text-decoration:none;"><span>Arbiter</span></a>
+    <div class="links">
+      <a href="../index.html">Home</a>
+      <a href="index.html">Demos</a>
+      <a href="../case-study.html">Case Study</a>      <a href="https://github.com/cyrenei/arbiter-mcp-firewall" class="cta-nav">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+<section class="hero">
+  <div class="container">
+    <span class="demo-num">Demo 07 of 10</span>
+    <h1>Input Validation for<br>AI Agent Tool Parameters</h1>
+    <p class="subtitle">
+      An agent is authorized to call generate_text. It sends max_tokens = 50,000.
+      The policy allows a maximum of 1,000. Arbiter catches the violation before
+      the request reaches the upstream server.
+    </p>
+  </div>
+</section>
+
+<!-- THE ATTACK -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Attack</h2>
+    <p class="lead">
+      Authorizing a tool is not enough. The parameters matter. An agent allowed to call
+      <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">generate_text</code>
+      with reasonable limits could be manipulated to set
+      <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">max_tokens</code>
+      to 50,000 -- consuming excessive compute resources on a single request.
+    </p>
+    <p>
+      Parameter tampering is a particularly subtle attack because the tool call itself is
+      legitimate. The agent has a valid session, the tool is in the whitelist, and the tool
+      name matches a policy. Only the argument values are out of bounds. Without parameter-level
+      constraints, the only defense is hoping the upstream server has its own validation.
+    </p>
+    <p>
+      This attack can be initiated by prompt injection ("set max_tokens to the maximum possible value"),
+      by a compromised agent, or by an attacker who has obtained valid session credentials and wants
+      to inflict maximum cost on the infrastructure. A single request with extreme parameters can
+      consume more resources than thousands of normal requests.
+    </p>
+  </div>
+</section>
+
+<!-- THE DEMO -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Demo</h2>
+    <p>
+      First, a legitimate call with max_tokens = 500 (passes). Then, the attack with
+      max_tokens = 50,000 (blocked).
+    </p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">config.toml</span>
+        <span>Policy with parameter constraints</span>
+      </div>
+      <div class="code-body">
+<span class="line"><span class="syn-comment"># Allow generate_text only when parameters are in bounds</span></span>
+<span class="line">[[policy.policies]]</span>
+<span class="line">id = <span class="syn-str">"allow-generate-bounded"</span></span>
+<span class="line">effect = <span class="syn-str">"allow"</span></span>
+<span class="line">allowed_tools = [<span class="syn-str">"generate_text"</span>]</span>
+<span class="line"></span>
+<span class="line">[[policy.policies.parameter_constraints]]</span>
+<span class="line">key = <span class="syn-str">"max_tokens"</span></span>
+<span class="line">min_value = 1.0</span>
+<span class="line">max_value = <span class="syn-red">1000.0</span></span>
+<span class="line"></span>
+<span class="line">[[policy.policies.parameter_constraints]]</span>
+<span class="line">key = <span class="syn-str">"temperature"</span></span>
+<span class="line">min_value = 0.0</span>
+<span class="line">max_value = 2.0</span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">legitimate call</span>
+        <span>max_tokens = 500 (within bounds)</span>
+      </div>
+      <div class="code-body">
+<span class="line"><span class="syn-comment"># max_tokens: 500 &lt;= 1000 limit &#x2714;</span></span>
+<span class="line">"arguments": {</span>
+<span class="line">  "prompt": "Summarize the quarterly report",</span>
+<span class="line">  "max_tokens": <span class="syn-green">500</span>,</span>
+<span class="line">  "temperature": 0.7</span>
+<span class="line">}</span>
+<span class="line"></span>
+<span class="line">Result: <span class="syn-green">PASSED</span> (HTTP 200/502)</span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">attack.sh</span>
+        <span>max_tokens = 50000 (exceeds constraint)</span>
+      </div>
+      <div class="code-body">
+<span class="line">curl -s -X POST http://127.0.0.1:8080 \</span>
+<span class="line">  -H "Content-Type: application/json" \</span>
+<span class="line">  -H "x-arbiter-session: $SESSION_ID" \</span>
+<span class="line">  -H "Authorization: Bearer $TOKEN" \</span>
+<span class="line">  -d '{</span>
+<span class="line">    "jsonrpc": "2.0",</span>
+<span class="line">    "id": 2,</span>
+<span class="line">    "method": "tools/call",</span>
+<span class="line">    "params": {</span>
+<span class="line">      "name": "generate_text",</span>
+<span class="line">      "arguments": {</span>
+<span class="line">        "prompt": "Generate an extremely long document",</span>
+<span class="line">        "max_tokens": <span class="syn-red">50000</span>,</span>
+<span class="line">        "temperature": 0.7</span>
+<span class="line">      }</span>
+<span class="line">    }</span>
+<span class="line">  }'</span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">response</span>
+        <span>HTTP 403</span>
+      </div>
+      <div class="code-body">
+<span class="line">{</span>
+<span class="line">  <span class="syn-key">"error"</span>: <span class="syn-str">"POLICY_DENIED"</span>,</span>
+<span class="line">  <span class="syn-key">"message"</span>: <span class="syn-str">"No matching Allow policy for this tool call"</span>,</span>
+<span class="line">  <span class="syn-key">"detail"</span>: <span class="syn-str">"parameter constraint failed: max_tokens=50000 exceeds max_value=1000"</span></span>
+<span class="line">}</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- THE DEFENSE -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Defense</h2>
+    <p>
+      Arbiter stops this attack at <strong style="color: var(--text);">Stage 8</strong>:
+      policy evaluation, via parameter constraint checking in the arbiter-policy crate.
+    </p>
+
+    <div class="defense-box">
+      <h3>arbiter-policy -- Parameter Constraints (Stage 8)</h3>
+      <p style="margin: 0; color: var(--text-secondary); font-size: 0.92rem;">
+        Each policy can include
+        <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">parameter_constraints</code>
+        entries that specify min/max bounds for numeric arguments. During policy matching,
+        the engine extracts the argument values from the parsed MCP request and checks each
+        one against the configured bounds. If any constraint fails, the policy does not match.
+        With deny-by-default, a non-matching policy means the request is denied. Parameter
+        constraints are composable: you can define different limits for different trust levels
+        or principals by creating separate policies with different bounds.
+      </p>
+    </div>
+
+    <p>
+      This design keeps parameter validation in the policy layer rather than hardcoding it in
+      the proxy. You can change limits without redeploying -- just update the config and
+      reload. Different agents can have different limits based on their trust level.
+    </p>
+  </div>
+</section>
+
+<!-- TRY IT YOURSELF -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>Try It Yourself</h2>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">terminal</span>
+        <span>Run the demo locally</span>
+      </div>
+      <div class="code-body">
+<span class="line">git clone https://github.com/cyrenei/arbiter-mcp-firewall</span>
+<span class="line">cd arbiter && cargo build --release</span>
+<span class="line">cd demos/07-parameter-tampering</span>
+<span class="line">bash demo.sh</span>
+      </div>
+    </div>
+    <p style="font-size: 0.88rem; color: var(--text-dim);">
+      The script makes a legitimate call (max_tokens=500, passes), then an attack
+      call (max_tokens=50000, blocked). Both use the same session and policy.
+    </p>
+  </div>
+</section>
+
+<!-- FURTHER READING -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>Further Reading</h2>
+    <p>
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall">Arbiter on GitHub</a> --
+      source code, architecture docs, and quickstart guide.
+    </p>
+    <p>
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall/blob/main/crates/arbiter-policy/src/model.rs">policy model source</a> --
+      data structures for parameter constraints and policy matching.
+    </p>
+
+    <div class="nav-demos">
+      <a href="zero-trust-policy.html">&larr; Prev: Zero-Trust Policy</a>
+      <a href="intent-drift.html">Next: Intent Drift &rarr;</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>
+      Apache 2.0 &middot;
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall">GitHub</a> &middot;
+      <a href="../case-study.html">Case Study</a> &middot;
+      <a href="./">All Demos</a> &middot;
+      <a href="../index.html">Home</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.08, rootMargin: '0px 0px -50px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

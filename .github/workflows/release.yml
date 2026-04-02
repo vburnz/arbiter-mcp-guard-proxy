@@ -1,0 +1,198 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # musl (static) — default Linux binaries
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            name: arbiter-linux-amd64
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            name: arbiter-linux-arm64
+          # glibc — secondary Linux binaries
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: arbiter-linux-gnu-amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: arbiter-linux-gnu-arm64
+          # macOS
+          - target: x86_64-apple-darwin
+            os: macos-14
+            name: arbiter-macos-amd64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: arbiter-macos-arm64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: contains(matrix.target, 'aarch64') && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Install musl tools
+        if: contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          if [[ "${{ matrix.target }}" == "aarch64"* ]]; then
+            sudo apt-get install -y musl-dev:arm64 || true
+          fi
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
+
+      - name: Package
+        shell: bash
+        env:
+          ARTIFACT_NAME: ${{ matrix.name }}
+          BUILD_TARGET: ${{ matrix.target }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          STAGING="arbiter-${TAG_NAME}-${BUILD_TARGET}"
+          mkdir -p "${STAGING}"
+
+          cp "target/${BUILD_TARGET}/release/arbiter" "${STAGING}/arbiter"
+          chmod +x "${STAGING}/arbiter"
+
+          # Include arbiter-ctl if it was built
+          if [ -f "target/${BUILD_TARGET}/release/arbiter-ctl" ]; then
+            cp "target/${BUILD_TARGET}/release/arbiter-ctl" "${STAGING}/arbiter-ctl"
+            chmod +x "${STAGING}/arbiter-ctl"
+          fi
+
+          # Include starter config and docs
+          cp deploy/arbiter.toml "${STAGING}/arbiter.toml"
+          cp LICENSE "${STAGING}/LICENSE" 2>/dev/null || true
+          cp README.md "${STAGING}/README.md" 2>/dev/null || true
+
+          tar czf "${ARTIFACT_NAME}.tar.gz" "${STAGING}"
+          shasum -a 256 "${ARTIFACT_NAME}.tar.gz" > "${ARTIFACT_NAME}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            ${{ matrix.name }}.tar.gz
+            ${{ matrix.name }}.tar.gz.sha256
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: artifacts
+        run: |
+          cat *.sha256 > checksums-sha256.txt
+
+      - name: Sign with minisign
+        working-directory: artifacts
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          # Install minisign
+          curl -sSfL https://github.com/jedisct1/minisign/releases/download/0.11/minisign-0.11-linux.tar.gz \
+            | tar xz --strip-components=2
+          chmod +x minisign
+
+          # Sign each tarball and the consolidated checksums
+          echo "${MINISIGN_SECRET_KEY}" > /tmp/minisign.key
+          for tarball in *.tar.gz; do
+            ./minisign -Sm "$tarball" -s /tmp/minisign.key -t "Arbiter ${{ github.ref_name }}"
+          done
+          ./minisign -Sm checksums-sha256.txt -s /tmp/minisign.key -t "Arbiter ${{ github.ref_name }}"
+          rm -f /tmp/minisign.key
+
+      - name: Generate attestations
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: artifacts/*.tar.gz
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          gh release create "${TAG_NAME}" \
+            --title "Arbiter ${TAG_NAME}" \
+            --generate-notes \
+            artifacts/*.tar.gz \
+            artifacts/*.minisig \
+            artifacts/checksums-sha256.txt \
+            deploy/arbiter.toml
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push container
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

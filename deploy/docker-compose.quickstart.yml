@@ -1,0 +1,36 @@
+# Arbiter Quickstart: Self-Hosted Deployment
+#
+# One-command deployment:
+#   docker compose -f deploy/docker-compose.quickstart.yml up
+#
+# Or build from source:
+#   docker compose -f deploy/docker-compose.quickstart.yml up --build
+#
+# Prerequisites:
+#   1. Copy deploy/arbiter.toml to ./arbiter.toml (or use as-is)
+#   2. Set environment variables (or accept defaults for local dev)
+#
+# Environment variables (set in shell or .env file):
+#   UPSTREAM_URL    upstream MCP server URL (default: http://host.docker.internal:3001)
+#   ADMIN_KEY       admin API authentication key (default: changeme)
+
+services:
+  arbiter:
+    image: ghcr.io/cyrenei/arbiter:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"   # proxy, point your MCP clients here
+      - "9090:9090"   # admin API: session management, agent registration
+    environment:
+      ARBITER_UPSTREAM_URL: "${UPSTREAM_URL:-http://host.docker.internal:3001}"
+      ARBITER_ADMIN_API_KEY: "${ADMIN_KEY:-changeme}"
+    volumes:
+      - ./arbiter.toml:/etc/arbiter/config.toml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped

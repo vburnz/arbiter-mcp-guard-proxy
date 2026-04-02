@@ -1,0 +1,48 @@
+/target
+*.swp
+*.swo
+.DS_Store
+.build-logs/
+scripts/
+
+# Node dependencies
+node_modules/
+
+# Testing artifacts
+test-traces/
+integration-testing/
+
+# Environment files (never commit secrets)
+.env
+.env.*
+
+# Minisign secret key (public key is committed; secret key is a GitHub Actions secret)
+.minisign/minisign.key
+
+# IDE / tool state
+.idea/
+.vscode/
+.claude/
+.playwright-mcp/
+*.iml
+
+# Large binary assets (track via Git LFS or host externally)
+*.png
+
+# Archived content
+.purge/
+docs/enterprise/
+docs/pricing.html
+docs/compare.html
+tests/license-interop/
+LAUNCH.md
+SECURITY-HARDENING.md
+
+# Execution state
+state/
+
+# Archived git state
+.git-old-ignore/
+
+# Sphinx build output
+docs/sphinx/_build/

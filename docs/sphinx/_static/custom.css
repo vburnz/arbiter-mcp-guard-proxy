@@ -1,0 +1,10 @@
+/* Arbiter: Furo customizations
+   Adds a top-bar linking back to the project homepage. */
+
+.announcement {
+  font-size: 0.85rem;
+  padding: 6px 16px;
+}
+.announcement a {
+  text-decoration: underline;
+}

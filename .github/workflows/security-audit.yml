@@ -1,0 +1,83 @@
+name: Security Audit
+
+on:
+  schedule:
+    # Every Monday at 08:00 UTC
+    - cron: "0 8 * * 1"
+  workflow_dispatch: {}
+  # Also run on PRs that touch dependencies
+  pull_request:
+    paths:
+      - "Cargo.lock"
+      - "**/Cargo.toml"
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run cargo audit
+        id: audit
+        continue-on-error: true
+        run: |
+          cargo audit --ignore RUSTSEC-2023-0071 --json > audit-results.json 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Check for vulnerabilities
+        if: steps.audit.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VULN_COUNT=$(jq '.vulnerabilities.found // 0' audit-results.json)
+          SUMMARY=$(cargo audit --ignore RUSTSEC-2023-0071 2>&1 | tail -20 || true)
+
+          # Only open an issue on scheduled runs, not PRs
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            EXISTING=$(gh issue list --label "security" --state open --search "cargo audit" --json number --jq '.[0].number // empty')
+            if [ -n "$EXISTING" ]; then
+              gh issue comment "$EXISTING" --body "$(cat <<EOF
+          ### Recurring audit: $(date +%Y-%m-%d)
+
+          Still **${VULN_COUNT}** known vulnerabilities in dependencies.
+
+          \`\`\`
+          ${SUMMARY}
+          \`\`\`
+          EOF
+          )"
+            else
+              gh issue create \
+                --title "cargo audit: ${VULN_COUNT} vulnerabilities found" \
+                --label "security" \
+                --body "$(cat <<EOF
+          ## Cargo Audit Report: $(date +%Y-%m-%d)
+
+          **${VULN_COUNT}** known vulnerabilities detected in dependencies.
+
+          \`\`\`
+          ${SUMMARY}
+          \`\`\`
+
+          Run \`cargo audit\` locally to review. Fix by updating affected crates or applying \`[advisories]
+          ignore\` in \`deny.toml\` for false positives.
+          EOF
+          )"
+            fi
+          fi
+
+          # Fail the workflow so PR checks show red
+          exit 1
+
+      - name: Audit passed
+        if: steps.audit.outcome == 'success'
+        run: echo "No known vulnerabilities found."

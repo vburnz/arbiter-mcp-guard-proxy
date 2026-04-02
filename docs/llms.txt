@@ -1,0 +1,61 @@
+# Arbiter
+
+> Open-source MCP tool-call firewall. Arbiter governs what agents are allowed to do. It does not govern what agents try to do. It protects the platform by reducing the tool-call attack surface.
+
+Sits between AI agents and MCP (Model Context Protocol) servers, enforcing deny-by-default authorization, session budgets, drift detection, and structured auditing on every tool call.
+
+## Key Facts
+
+- Language: Rust
+- License: Apache-2.0
+- Author: Cyrene I.
+- Repository: https://github.com/cyrenei/arbiter
+- Documentation: https://cyrenei.github.io/arbiter-mcp-firewall/docs/
+- Homepage: https://cyrenei.github.io/arbiter-mcp-firewall/
+
+## What Arbiter Does
+
+Every tool call passes through a 9-stage middleware pipeline:
+
+1. TLS termination
+2. OAuth 2.1 JWT validation with JWKS caching and multi-issuer support
+3. Agent identity resolution from verified claims
+4. Time-limited, budget-capped task session binding
+5. Deny-by-default, specificity-ordered policy evaluation
+6. Drift detection (flags when operation types diverge from session scope)
+7. Credential injection for authorized calls
+8. Reverse proxying to upstream MCP server
+9. Structured JSONL audit logging with PII redaction
+
+## Core Capabilities
+
+- Agent identity and delegation with trust levels and cascade deactivation
+- Deny-by-default authorization: policy engine evaluating agent identity, session context, tool name, and parameter constraints
+- Task sessions: time-limited, budget-capped, tool-whitelisted sessions per task
+- Drift detection: flags or blocks when operation types diverge from session scope
+- Per-agent session cap to prevent session multiplication attacks
+- Response body inspection for secrets, PII, and prompt injection payloads
+- Prometheus metrics: request counts, latency histograms, active sessions gauge
+- Environment-based secrets management with constant-time comparison
+
+## Who Arbiter Is For
+
+Engineering teams that deploy AI agents using MCP and need deny-by-default authorization on individual tool calls, not just API endpoints.
+
+## Who Arbiter Is Not For
+
+Teams requiring centralized NHI management across hundreds of service identities, or those looking for a managed SaaS platform.
+
+## Architecture
+
+Arbiter is a Rust workspace with 14 specialized crates: arbiter (integration binary), arbiter-proxy, arbiter-oauth, arbiter-identity, arbiter-lifecycle, arbiter-cli, arbiter-mcp, arbiter-policy, arbiter-session, arbiter-behavior, arbiter-metrics, arbiter-audit, arbiter-credential, arbiter-storage.
+
+## Links
+
+- Quickstart: https://cyrenei.github.io/arbiter-mcp-firewall/docs/getting-started/quickstart.html
+- Architecture: https://cyrenei.github.io/arbiter-mcp-firewall/docs/understanding/architecture.html
+- Policy language: https://cyrenei.github.io/arbiter-mcp-firewall/docs/guides/policy.html
+- Security model: https://cyrenei.github.io/arbiter-mcp-firewall/docs/understanding/security-model.html
+- Attack scenarios: https://cyrenei.github.io/arbiter-mcp-firewall/docs/reference/attack-scenarios.html
+- Case study: https://cyrenei.github.io/arbiter-mcp-firewall/case-study.html
+- Comparison with alternatives: https://cyrenei.github.io/arbiter-mcp-firewall/compare.html

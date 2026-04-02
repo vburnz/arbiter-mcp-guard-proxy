@@ -1,0 +1,74 @@
+# Arbiter E2E configuration: superset for demos 01-09.
+# Merges settings from all demo configs with container networking.
+#
+# Enforcement layers tested:
+#   Demo 01: require_session = true         (session middleware)
+#   Demo 02: strict_mcp = true              (MCP parser)
+#   Demo 03: Session tool whitelist         (session middleware)
+#   Demo 04: Per-session rate limit + budget (session middleware)
+#   Demo 05: Session TTL + close            (session middleware)
+#   Demo 06: Deny-by-default policy         (policy engine, principal_match)
+#   Demo 07: Parameter constraints           (policy engine, max_value)
+#   Demo 08: Behavioral anomaly detection    (behavior engine, escalate)
+#   Demo 09: Per-agent session cap           (session middleware)
+
+[proxy]
+listen_addr = "0.0.0.0"
+listen_port = 8080
+upstream_url = "http://mcp-echo:8081"
+require_session = true
+strict_mcp = true
+
+[sessions]
+default_time_limit_secs = 3600
+default_call_budget = 100
+rate_limit_window_secs = 60
+escalate_anomalies = true                   # Demo 08
+max_concurrent_sessions_per_agent = 10      # Demo 09
+
+[audit]
+enabled = true
+
+[metrics]
+enabled = true
+
+[admin]
+listen_addr = "0.0.0.0"
+listen_port = 3000
+api_key = "demo-key"
+signing_secret = "demo-secret"
+token_expiry_secs = 3600
+
+# ── Policies ───────────────────────────────────────────────────────
+# Combined from demos 06, 07, 08. Order does not matter: deny-by-default
+# means the ABSENCE of a matching Allow is what denies.
+
+# Demo 06: Only user:trusted-team can deploy.
+[[policy.policies]]
+id = "allow-trusted-deploy"
+effect = "allow"
+allowed_tools = ["deploy_service"]
+[policy.policies.principal_match]
+sub = "user:trusted-team"
+[policy.policies.intent_match]
+keywords = ["deploy"]
+
+# Demo 07: generate_text with parameter constraints.
+[[policy.policies]]
+id = "allow-generate-bounded"
+effect = "allow"
+allowed_tools = ["generate_text"]
+[[policy.policies.parameter_constraints]]
+key = "max_tokens"
+max_value = 1000.0
+min_value = 1.0
+[[policy.policies.parameter_constraints]]
+key = "temperature"
+max_value = 2.0
+min_value = 0.0
+
+# Demo 08 + general: file operations for read/write/delete tests.
+[[policy.policies]]
+id = "allow-all-file-ops"
+effect = "allow"
+allowed_tools = ["read_file", "list_dir", "write_file", "delete_file"]

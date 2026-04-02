@@ -1,0 +1,11 @@
+# cargo-audit configuration
+# https://github.com/rustsec/rustsec/tree/main/cargo-audit
+
+[advisories]
+# RUSTSEC-2023-0071: rsa crate - Marvin Attack (timing side-channel)
+# This advisory has NO patched version available.
+# The rsa crate is pulled into Cargo.lock as an optional transitive dependency
+# of sqlx-mysql (via sqlx). We do NOT enable the mysql feature — only sqlite is
+# used — so this crate is never compiled or linked into any Arbiter binary.
+# Ignoring until upstream sqlx-mysql migrates away from rsa or a patch lands.
+ignore = ["RUSTSEC-2023-0071"]

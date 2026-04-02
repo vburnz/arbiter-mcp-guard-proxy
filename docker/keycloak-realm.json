@@ -1,0 +1,43 @@
+{
+  "realm": "arbiter",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "clients": [
+    {
+      "clientId": "arbiter-api",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "arbiter-client-secret",
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "protocol": "openid-connect"
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@example.com",
+      "firstName": "Alice",
+      "lastName": "Agent-Owner",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice-password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["default-roles-arbiter"]
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "default-roles-arbiter",
+        "composite": false
+      }
+    ]
+  }
+}

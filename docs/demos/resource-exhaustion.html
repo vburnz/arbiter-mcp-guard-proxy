@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Preventing AI Agent Resource Exhaustion | Arbiter Security</title>
+  <meta name="description" content="How Arbiter enforces per-session call budgets and rate limits to prevent AI agent resource exhaustion. Runaway agents are stopped with 429 after exceeding configurable limits.">
+  <meta name="keywords" content="AI agent resource exhaustion, rate limiting, call budget, MCP security, runaway agent, API abuse prevention, agent throttling">
+  <meta property="og:title" content="Preventing AI Agent Resource Exhaustion | Arbiter">
+  <meta property="og:description" content="A runaway agent exhausts its call budget and rate limit. Arbiter enforces per-session resource caps with O(1) overhead. 429 after limits exceeded.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://cyrenei.github.io/arbiter-mcp-firewall/demos/resource-exhaustion">
+  <link rel="canonical" href="https://cyrenei.github.io/arbiter-mcp-firewall/demos/resource-exhaustion">
+  <link rel="stylesheet" href="../styles/a11y.css">
+  <style>
+    :root {
+      --bg: #0a0e17;
+      --surface: #111827;
+      --surface-alt: #1a2235;
+      --border: #1e293b;
+      --border-bright: #334155;
+      --text: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-dim: #64748b;
+      --accent: #3b82f6;
+      --accent-bright: #60a5fa;
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.12);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.12);
+      --purple: #a78bfa;
+      --cyan: #22d3ee;
+      --mono: "SF Mono", "Fira Code", "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; -webkit-font-smoothing: antialiased; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+    .narrow { max-width: 720px; margin: 0 auto; }
+    section { padding: 80px 0; }
+    section + section { border-top: 1px solid var(--border); }
+
+    h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.15; letter-spacing: -0.03em; }
+    h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 24px; }
+    h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; }
+    p { color: var(--text-secondary); margin-bottom: 16px; }
+    .lead { font-size: 1.15rem; line-height: 1.8; }
+    a { color: var(--accent-bright); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(10, 14, 23, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 14px 0; }
+    nav .container { display: flex; align-items: center; justify-content: space-between; }
+    nav .logo { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+    nav .logo span { color: var(--accent-bright); }
+    nav .links { display: flex; gap: 24px; }
+    nav .links a { color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; }
+    nav .links a:hover { color: var(--text); text-decoration: none; }
+
+    .hero { padding: 100px 0 60px; text-align: center; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; background: radial-gradient(circle, rgba(239,68,68,0.06) 0%, transparent 70%); pointer-events: none; }
+    .hero .demo-num { font-family: var(--mono); font-size: 0.78rem; color: var(--red); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 16px; display: block; }
+    .hero h1 { margin-bottom: 20px; }
+    .hero .subtitle { font-size: 1.15rem; color: var(--text-secondary); max-width: 620px; margin: 0 auto; line-height: 1.8; }
+
+    .code-block { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 24px 0; }
+    .code-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: var(--surface-alt); border-bottom: 1px solid var(--border); font-size: 0.8rem; color: var(--text-dim); }
+    .code-header .filename { font-family: var(--mono); font-weight: 600; color: var(--text-secondary); }
+    .code-body { padding: 18px; overflow-x: auto; font-family: var(--mono); font-size: 0.82rem; line-height: 1.65; color: var(--text-secondary); }
+    .code-body .line { display: block; white-space: pre; }
+    .syn-comment { color: var(--text-dim); font-style: italic; }
+    .syn-str { color: var(--green); }
+    .syn-key { color: var(--purple); }
+    .syn-red { color: var(--red); font-weight: 600; }
+    .syn-green { color: var(--green); font-weight: 600; }
+
+    .defense-box { background: var(--surface); border: 1px solid rgba(34, 197, 94, 0.2); border-left: 4px solid var(--green); border-radius: 0 10px 10px 0; padding: 24px 28px; margin: 24px 0; }
+    .defense-box h3 { color: var(--green); margin-bottom: 8px; }
+
+    .nav-demos { display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); }
+    .nav-demos a { font-size: 0.9rem; font-weight: 500; }
+
+    footer { text-align: center; padding: 28px 0; color: var(--text-dim); font-size: 0.82rem; border-top: 1px solid var(--border); }
+    footer a { color: var(--accent); }
+
+    .reveal { opacity: 0; transform: translateY(28px); transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+<a href="#main" class="skip-nav">Skip to main content</a>
+
+<nav>
+  <div class="container">
+    <a href="../index.html" class="logo" style="text-decoration:none;"><span>Arbiter</span></a>
+    <div class="links">
+      <a href="../index.html">Home</a>
+      <a href="index.html">Demos</a>
+      <a href="../case-study.html">Case Study</a>      <a href="https://github.com/cyrenei/arbiter-mcp-firewall" class="cta-nav">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+<section class="hero">
+  <div class="container">
+    <span class="demo-num">Demo 04 of 10</span>
+    <h1>Preventing AI Agent<br>Resource Exhaustion</h1>
+    <p class="subtitle">
+      A runaway agent floods the upstream server with tool calls.
+      Arbiter enforces per-session call budgets and per-minute rate limits,
+      returning 429 after either limit is exceeded.
+    </p>
+  </div>
+</section>
+
+<!-- THE ATTACK -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Attack</h2>
+    <p class="lead">
+      AI agents can enter runaway loops. A prompt injection can instruct an agent to
+      make thousands of API calls. A bug in the agent's reasoning loop can cause it
+      to retry indefinitely. Without limits, one agent can exhaust the entire upstream service.
+    </p>
+    <p>
+      Resource exhaustion attacks do not require the agent to be malicious. A well-intentioned
+      agent that encounters an error and retries aggressively can consume API quotas, rack up
+      cloud costs, and degrade service for other agents and users. The upstream server has
+      no way to distinguish a legitimate burst from an attack.
+    </p>
+    <p>
+      Traditional API rate limiting operates at the endpoint or IP level. AI agent resource
+      exhaustion requires per-session limits: each agent session gets its own call budget
+      and rate ceiling, independent of other sessions on the same IP or agent identity.
+    </p>
+  </div>
+</section>
+
+<!-- THE DEMO -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Demo</h2>
+    <p>
+      Two scenarios: rate limit exhaustion (3 calls per minute) and total budget exhaustion (5 calls lifetime).
+    </p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">Part A: Rate limit</span>
+        <span>3 calls/minute, 4th call rejected</span>
+      </div>
+      <div class="code-body">
+<span class="line"><span class="syn-comment"># Session created with rate_limit_per_minute: 3</span></span>
+<span class="line"><span class="syn-comment"># Calls 1-3 succeed, call 4 hits the rate limit</span></span>
+<span class="line"></span>
+<span class="line">Call 1: <span class="syn-green">OK</span> (passed rate check)</span>
+<span class="line">Call 2: <span class="syn-green">OK</span> (passed rate check)</span>
+<span class="line">Call 3: <span class="syn-green">OK</span> (passed rate check)</span>
+<span class="line">Call 4: <span class="syn-red">429 RATE LIMITED</span></span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">Part B: Budget exhaustion</span>
+        <span>5 total calls, 6th call rejected</span>
+      </div>
+      <div class="code-body">
+<span class="line"><span class="syn-comment"># Session created with call_budget: 5</span></span>
+<span class="line"><span class="syn-comment"># Calls 1-5 succeed, call 6 exceeds the budget</span></span>
+<span class="line"></span>
+<span class="line">Call 1: <span class="syn-green">OK</span> (1/5 budget used)</span>
+<span class="line">Call 2: <span class="syn-green">OK</span> (2/5 budget used)</span>
+<span class="line">Call 3: <span class="syn-green">OK</span> (3/5 budget used)</span>
+<span class="line">Call 4: <span class="syn-green">OK</span> (4/5 budget used)</span>
+<span class="line">Call 5: <span class="syn-green">OK</span> (5/5 budget used)</span>
+<span class="line">Call 6: <span class="syn-red">429 BUDGET EXHAUSTED</span></span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">response</span>
+        <span>HTTP 429</span>
+      </div>
+      <div class="code-body">
+<span class="line">{</span>
+<span class="line">  <span class="syn-key">"error"</span>: <span class="syn-str">"SESSION_INVALID"</span>,</span>
+<span class="line">  <span class="syn-key">"message"</span>: <span class="syn-str">"Session call budget exhausted"</span></span>
+<span class="line">}</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- THE DEFENSE -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Defense</h2>
+    <p>
+      Arbiter stops this attack at <strong style="color: var(--text);">Stage 6</strong>:
+      session enforcement, using two independent mechanisms.
+    </p>
+
+    <div class="defense-box">
+      <h3>arbiter-session -- Call Budget &amp; Rate Limit (Stage 6)</h3>
+      <p style="margin: 0; color: var(--text-secondary); font-size: 0.92rem;">
+        Each session tracks two counters: a lifetime call count (compared against
+        <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">call_budget</code>)
+        and a sliding-window rate counter (compared against
+        <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">rate_limit_per_minute</code>).
+        Both checks are O(1) per request with no external dependencies. When either limit is
+        exceeded, Arbiter returns HTTP 429 with error code
+        <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">SESSION_INVALID</code>.
+        The session is not destroyed -- it simply stops accepting new calls until the rate window resets
+        or a new session is created.
+      </p>
+    </div>
+
+    <p>
+      Both limits are configured at session creation time, which means different agents
+      can have different resource ceilings. A trusted internal agent might get a budget of
+      10,000 calls. An external contractor agent might get 50. The same proxy handles both.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">session creation</span>
+        <span>Configuring resource limits per session</span>
+      </div>
+      <div class="code-body">
+<span class="line">{</span>
+<span class="line">  <span class="syn-key">"agent_id"</span>: <span class="syn-str">"agent-xyz"</span>,</span>
+<span class="line">  <span class="syn-key">"declared_intent"</span>: <span class="syn-str">"read project files"</span>,</span>
+<span class="line">  <span class="syn-key">"authorized_tools"</span>: [<span class="syn-str">"read_file"</span>],</span>
+<span class="line">  <span class="syn-key">"call_budget"</span>: 5,                   <span class="syn-comment">// max 5 total calls</span></span>
+<span class="line">  <span class="syn-key">"rate_limit_per_minute"</span>: 3,          <span class="syn-comment">// max 3 calls per minute</span></span>
+<span class="line">  <span class="syn-key">"time_limit_secs"</span>: 3600</span>
+<span class="line">}</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TRY IT YOURSELF -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>Try It Yourself</h2>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">terminal</span>
+        <span>Run the demo locally</span>
+      </div>
+      <div class="code-body">
+<span class="line">git clone https://github.com/cyrenei/arbiter-mcp-firewall</span>
+<span class="line">cd arbiter && cargo build --release</span>
+<span class="line">cd demos/04-resource-exhaustion</span>
+<span class="line">bash demo.sh</span>
+      </div>
+    </div>
+    <p style="font-size: 0.88rem; color: var(--text-dim);">
+      The script runs both rate limit and budget exhaustion scenarios, showing
+      each call's status in real time.
+    </p>
+  </div>
+</section>
+
+<!-- FURTHER READING -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>Further Reading</h2>
+    <p>
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall">Arbiter on GitHub</a> --
+      source code, architecture docs, and quickstart guide.
+    </p>
+    <p>
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall/blob/main/crates/arbiter-session/src/store.rs">session store source</a> --
+      call budget and rate limit tracking implementation.
+    </p>
+
+    <div class="nav-demos">
+      <a href="tool-escalation.html">&larr; Prev: Tool Escalation</a>
+      <a href="session-replay.html">Next: Session Replay &rarr;</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>
+      Apache 2.0 &middot;
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall">GitHub</a> &middot;
+      <a href="../case-study.html">Case Study</a> &middot;
+      <a href="./">All Demos</a> &middot;
+      <a href="../index.html">Home</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.08, rootMargin: '0px 0px -50px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

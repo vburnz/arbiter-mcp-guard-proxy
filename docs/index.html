@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arbiter: MCP Tool-Call Firewall</title>
+  <meta name="description" content="Open-source MCP tool-call firewall. Deny-by-default authorization, session budgets, drift detection, and audit logging for every tool call.">
+  <link rel="canonical" href="https://cyrenei.github.io/arbiter-mcp-firewall/">
+  <link rel="stylesheet" href="styles/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <nav>
+    <div class="inner">
+      <a class="logo" href="./">Arbiter</a>
+      <div class="links">
+        <a href="docs/">Docs</a>
+        <a href="https://github.com/cyrenei/arbiter-mcp-firewall">Code</a>
+        <a class="sponsor" href="https://github.com/sponsors/cyrenei">Sponsor</a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main" class="container">
+    <h1>Arbiter</h1>
+    <p class="tagline">MCP tool-call firewall.</p>
+
+    <div class="info-strip">
+      <span>v0.5.0</span>
+      <span>Apache-2.0</span>
+      <span>Rust</span>
+      <span><a href="https://github.com/cyrenei/arbiter-mcp-firewall">github.com/cyrenei/arbiter-mcp-firewall</a></span>
+    </div>
+
+    <p>Arbiter governs what agents are allowed to do. It does not govern what
+    agents try to do. It sits between your AI agents and the MCP servers
+    they talk to, enforcing deny-by-default authorization on every tool
+    call.</p>
+
+    <p>Traditional access control was built for humans who log in and make
+    decisions. Arbiter was built for agents that fire hundreds of tool calls
+    per session. It adds session budgets, tool whitelisting, drift detection,
+    credential injection, and structured audit logging with PII redaction.</p>
+
+    <h2>Install</h2>
+
+    <pre><code>curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh</code></pre>
+
+    <p class="desc">Downloads the latest binary for your platform (Linux or macOS) with SHA256 verification. No sudo required.</p>
+
+    <h2>Get Started</h2>
+
+    <ul class="doc-links">
+      <li><a href="docs/getting-started/quickstart.html">Quickstart</a>
+        <span class="desc">: clone to first proxied tool call in 5 minutes</span></li>
+      <li><a href="case-study.html">Case Study</a>
+        <span class="desc">: QuantumBank attack scenario with full audit trail</span></li>
+      <li><a href="docs/understanding/architecture.html">Architecture</a>
+        <span class="desc">: the 9-stage middleware chain</span></li>
+      <li><a href="demos/">Demos</a>
+        <span class="desc">: interactive attack scenarios</span></li>
+      <li><a href="docs/">Documentation</a>
+        <span class="desc">: guides, reference, and deployment</span></li>
+    </ul>
+
+    <h2>Support</h2>
+
+    <p>Report bugs and request features on
+    <a href="https://github.com/cyrenei/arbiter-mcp-firewall/issues">GitHub Issues</a>.</p>
+
+    <p>If Arbiter is useful to you, consider
+    <a href="https://github.com/sponsors/cyrenei">sponsoring the project</a>.</p>
+  </main>
+
+  <footer>
+    <div class="container">
+      Arbiter v0.5.0 &middot; Apache-2.0 &middot;
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall">GitHub</a> &middot;
+      <a href="docs/">Docs</a>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Agent Tool Escalation: Attack and Defense | Arbiter Security</title>
+  <meta name="description" content="How Arbiter prevents AI agent tool escalation. An agent authorized for read-only tools attempts to call delete_file. Arbiter's session whitelist blocks the unauthorized tool call.">
+  <meta name="keywords" content="tool escalation, AI agent privilege escalation, MCP security, session whitelist, least privilege AI, agent authorization">
+  <meta property="og:title" content="AI Agent Tool Escalation: Attack and Defense | Arbiter">
+  <meta property="og:description" content="An agent with read-only permissions attempts delete_file. Arbiter's per-session tool whitelist catches the escalation and returns 403. Every tool call is scoped.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://cyrenei.github.io/arbiter-mcp-firewall/demos/tool-escalation">
+  <link rel="canonical" href="https://cyrenei.github.io/arbiter-mcp-firewall/demos/tool-escalation">
+  <link rel="stylesheet" href="../styles/a11y.css">
+  <style>
+    :root {
+      --bg: #0a0e17;
+      --surface: #111827;
+      --surface-alt: #1a2235;
+      --border: #1e293b;
+      --border-bright: #334155;
+      --text: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-dim: #64748b;
+      --accent: #3b82f6;
+      --accent-bright: #60a5fa;
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.12);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.12);
+      --purple: #a78bfa;
+      --cyan: #22d3ee;
+      --mono: "SF Mono", "Fira Code", "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+    .narrow { max-width: 720px; margin: 0 auto; }
+    section { padding: 80px 0; }
+    section + section { border-top: 1px solid var(--border); }
+
+    h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.15; letter-spacing: -0.03em; }
+    h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 24px; }
+    h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; }
+    p { color: var(--text-secondary); margin-bottom: 16px; }
+    .lead { font-size: 1.15rem; line-height: 1.8; }
+    a { color: var(--accent-bright); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(10, 14, 23, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 14px 0; }
+    nav .container { display: flex; align-items: center; justify-content: space-between; }
+    nav .logo { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+    nav .logo span { color: var(--accent-bright); }
+    nav .links { display: flex; gap: 24px; }
+    nav .links a { color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; }
+    nav .links a:hover { color: var(--text); text-decoration: none; }
+
+    .hero { padding: 100px 0 60px; text-align: center; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; background: radial-gradient(circle, rgba(239,68,68,0.06) 0%, transparent 70%); pointer-events: none; }
+    .hero .demo-num { font-family: var(--mono); font-size: 0.78rem; color: var(--red); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 16px; display: block; }
+    .hero h1 { margin-bottom: 20px; }
+    .hero .subtitle { font-size: 1.15rem; color: var(--text-secondary); max-width: 600px; margin: 0 auto; line-height: 1.8; }
+
+    .code-block { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 24px 0; }
+    .code-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: var(--surface-alt); border-bottom: 1px solid var(--border); font-size: 0.8rem; color: var(--text-dim); }
+    .code-header .filename { font-family: var(--mono); font-weight: 600; color: var(--text-secondary); }
+    .code-body { padding: 18px; overflow-x: auto; font-family: var(--mono); font-size: 0.82rem; line-height: 1.65; color: var(--text-secondary); }
+    .code-body .line { display: block; white-space: pre; }
+    .syn-comment { color: var(--text-dim); font-style: italic; }
+    .syn-str { color: var(--green); }
+    .syn-key { color: var(--purple); }
+    .syn-red { color: var(--red); font-weight: 600; }
+    .syn-green { color: var(--green); font-weight: 600; }
+
+    .defense-box { background: var(--surface); border: 1px solid rgba(34, 197, 94, 0.2); border-left: 4px solid var(--green); border-radius: 0 10px 10px 0; padding: 24px 28px; margin: 24px 0; }
+    .defense-box h3 { color: var(--green); margin-bottom: 8px; }
+
+    .nav-demos { display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); }
+    .nav-demos a { font-size: 0.9rem; font-weight: 500; }
+
+    footer { text-align: center; padding: 28px 0; color: var(--text-dim); font-size: 0.82rem; border-top: 1px solid var(--border); }
+    footer a { color: var(--accent); }
+
+    .reveal { opacity: 0; transform: translateY(28px); transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+<a href="#main" class="skip-nav">Skip to main content</a>
+
+<nav>
+  <div class="container">
+    <a href="../index.html" class="logo" style="text-decoration:none;"><span>Arbiter</span></a>
+    <div class="links">
+      <a href="../index.html">Home</a>
+      <a href="index.html">Demos</a>
+      <a href="../case-study.html">Case Study</a>      <a href="https://github.com/cyrenei/arbiter-mcp-firewall" class="cta-nav">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+<section class="hero">
+  <div class="container">
+    <span class="demo-num">Demo 03 of 10</span>
+    <h1>AI Agent Tool Escalation:<br>Attack and Defense</h1>
+    <p class="subtitle">
+      An agent authorized for read_file and list_dir attempts to call delete_file.
+      Arbiter's per-session tool whitelist stops the escalation before the request
+      leaves the proxy.
+    </p>
+  </div>
+</section>
+
+<!-- THE ATTACK -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Attack</h2>
+    <p class="lead">
+      Tool escalation is the privilege escalation of the AI agent world. An agent starts with
+      a narrow set of authorized tools and attempts to invoke tools outside that set.
+    </p>
+    <p>
+      In this scenario, an administrator creates a session authorizing an agent to use only
+      <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">read_file</code> and
+      <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">list_dir</code>.
+      The agent first makes a legitimate read_file call, which succeeds. Then it attempts to call
+      delete_file -- a destructive operation outside its authorized scope.
+    </p>
+    <p>
+      Without session-scoped tool whitelisting, a compromised or misbehaving agent can invoke
+      any tool the upstream server exposes. This is especially dangerous when agents have access
+      to broad tool catalogs that include both read and write operations. A single prompt injection
+      can redirect the agent from reading data to deleting it.
+    </p>
+  </div>
+</section>
+
+<!-- THE DEMO -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Demo</h2>
+    <p>
+      First, a legitimate read_file call (which passes). Then, the attack: delete_file.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">setup</span>
+        <span>Session scoped to read-only tools</span>
+      </div>
+      <div class="code-body">
+<span class="line"><span class="syn-comment"># Create session with explicit tool whitelist</span></span>
+<span class="line">curl -s -X POST http://127.0.0.1:3000/sessions \</span>
+<span class="line">  -H "x-api-key: demo-key" \</span>
+<span class="line">  -H "Content-Type: application/json" \</span>
+<span class="line">  -d '{</span>
+<span class="line">    "agent_id": "agent-xyz",</span>
+<span class="line">    "declared_intent": "read and list project files",</span>
+<span class="line">    "authorized_tools": [<span class="syn-str">"read_file"</span>, <span class="syn-str">"list_dir"</span>],</span>
+<span class="line">    "time_limit_secs": 3600,</span>
+<span class="line">    "call_budget": 100</span>
+<span class="line">  }'</span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">attack.sh</span>
+        <span>Attempt to call delete_file (not in whitelist)</span>
+      </div>
+      <div class="code-body">
+<span class="line">curl -s -X POST http://127.0.0.1:8080 \</span>
+<span class="line">  -H "Content-Type: application/json" \</span>
+<span class="line">  -H "x-arbiter-session: $SESSION_ID" \</span>
+<span class="line">  -H "Authorization: Bearer $TOKEN" \</span>
+<span class="line">  -d '{</span>
+<span class="line">    "jsonrpc": "2.0",</span>
+<span class="line">    "id": 2,</span>
+<span class="line">    "method": "tools/call",</span>
+<span class="line">    "params": {</span>
+<span class="line">      "name": <span class="syn-red">"delete_file"</span>,</span>
+<span class="line">      "arguments": { "path": "/etc/passwd" }</span>
+<span class="line">    }</span>
+<span class="line">  }'</span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">response</span>
+        <span>HTTP 403</span>
+      </div>
+      <div class="code-body">
+<span class="line">{</span>
+<span class="line">  <span class="syn-key">"error"</span>: <span class="syn-str">"SESSION_INVALID"</span>,</span>
+<span class="line">  <span class="syn-key">"message"</span>: <span class="syn-str">"Tool 'delete_file' is not in this session's authorized tool set"</span></span>
+<span class="line">}</span>
+      </div>
+    </div>
+
+    <p style="font-size: 0.88rem; color: var(--text-dim);">
+      The read_file call passed (HTTP 200/502). The delete_file call was blocked (HTTP 403).
+      The session remains valid for future authorized calls.
+    </p>
+  </div>
+</section>
+
+<!-- THE DEFENSE -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Defense</h2>
+    <p>
+      Arbiter stops this attack at <strong style="color: var(--text);">Stage 6</strong>:
+      session enforcement in the arbiter-session crate.
+    </p>
+
+    <div class="defense-box">
+      <h3>arbiter-session -- Tool Whitelisting (Stage 6)</h3>
+      <p style="margin: 0; color: var(--text-secondary); font-size: 0.92rem;">
+        Every session is created with an explicit
+        <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">authorized_tools</code> list.
+        When a tool call arrives, the session middleware extracts the tool name from the parsed
+        MCP request and checks it against this whitelist. If the tool is not in the set, the
+        request is rejected with <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">SESSION_INVALID</code>.
+        The check is O(1) -- it uses a HashSet lookup -- and the session is not invalidated,
+        so the agent can still make calls with authorized tools.
+      </p>
+    </div>
+
+    <p>
+      This implements the principle of least privilege at the tool-call level. Even if an agent is
+      authenticated, has a valid session, and passes policy evaluation, it can only invoke the
+      specific tools it was granted when the session was created.
+    </p>
+  </div>
+</section>
+
+<!-- TRY IT YOURSELF -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>Try It Yourself</h2>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">terminal</span>
+        <span>Run the demo locally</span>
+      </div>
+      <div class="code-body">
+<span class="line">git clone https://github.com/cyrenei/arbiter-mcp-firewall</span>
+<span class="line">cd arbiter && cargo build --release</span>
+<span class="line">cd demos/03-tool-escalation</span>
+<span class="line">bash demo.sh</span>
+      </div>
+    </div>
+    <p style="font-size: 0.88rem; color: var(--text-dim);">
+      The script registers an agent, creates a scoped session, makes a legitimate call,
+      then attempts the escalation. Watch both responses side by side.
+    </p>
+  </div>
+</section>
+
+<!-- FURTHER READING -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>Further Reading</h2>
+    <p>
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall">Arbiter on GitHub</a> --
+      source code, architecture docs, and quickstart guide.
+    </p>
+    <p>
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall/blob/main/crates/arbiter-session/src/store.rs">session store source</a> --
+      the session store that enforces tool whitelists and call budgets.
+    </p>
+
+    <div class="nav-demos">
+      <a href="protocol-injection.html">&larr; Prev: Protocol Injection</a>
+      <a href="resource-exhaustion.html">Next: Resource Exhaustion &rarr;</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>
+      Apache 2.0 &middot;
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall">GitHub</a> &middot;
+      <a href="../case-study.html">Case Study</a> &middot;
+      <a href="./">All Demos</a> &middot;
+      <a href="../index.html">Home</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.08, rootMargin: '0px 0px -50px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

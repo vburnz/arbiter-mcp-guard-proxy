@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0e17"/>
+      <stop offset="100%" style="stop-color:#111827"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <text x="640" y="200" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="#e2e8f0" text-anchor="middle" letter-spacing="-2">Arbiter</text>
+  <text x="640" y="270" font-family="system-ui, -apple-system, sans-serif" font-size="28" fill="#94a3b8" text-anchor="middle">IAM Gateway for AI Agents</text>
+  <line x1="440" y1="310" x2="840" y2="310" stroke="#1e293b" stroke-width="1"/>
+  <text x="640" y="370" font-family="ui-monospace, monospace" font-size="16" fill="#64748b" text-anchor="middle">TLS  &gt;  OAuth  &gt;  Identity  &gt;  Session  &gt;  Policy  &gt;  Behavior  &gt;  Credential  &gt;  Proxy  &gt;  Audit</text>
+  <text x="640" y="430" font-family="system-ui, sans-serif" font-size="20" fill="#3b82f6" text-anchor="middle">Deny-by-default authorization | Session budgets | Behavioral anomaly detection</text>
+  <text x="640" y="530" font-family="system-ui, sans-serif" font-size="18" fill="#475569" text-anchor="middle">Open source  |  Rust  |  Apache-2.0  |  github.com/cyrenei/arbiter-mcp-firewall</text>
+</svg>

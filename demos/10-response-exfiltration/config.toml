@@ -1,0 +1,31 @@
+# Demo 10: Credential Leakage via Response
+# Attack: Upstream MCP server echoes injected credentials back in response.
+# Defense: Credential scrubbing replaces leaked values with [CREDENTIAL].
+
+[proxy]
+listen_addr = "127.0.0.1"
+listen_port = 8080
+upstream_url = "http://127.0.0.1:8081"
+require_session = true
+strict_mcp = true
+
+[sessions]
+default_time_limit_secs = 3600
+default_call_budget = 100
+
+[credentials]
+provider = "file"
+file_path = "credentials.toml"
+
+[audit]
+enabled = true
+
+[metrics]
+enabled = true
+
+[admin]
+listen_addr = "127.0.0.1"
+listen_port = 3000
+api_key = "demo-key"
+signing_secret = "demo-secret"
+token_expiry_secs = 3600

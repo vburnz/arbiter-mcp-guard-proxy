@@ -1,0 +1,65 @@
+[package]
+name = "arbiter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Arbiter: MCP tool-call firewall, integration binary"
+
+[lib]
+name = "arbiter"
+path = "src/lib.rs"
+
+[[bin]]
+name = "arbiter"
+path = "src/main.rs"
+
+[features]
+default = ["watch"]
+watch = ["arbiter-policy/watch"]
+sqlite = ["arbiter-storage/sqlite"]
+
+[dependencies]
+anyhow = "1"
+flate2 = "1"
+axum = { version = "0.8", features = ["json"] }
+bytes = "1"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive", "env"] }
+http-body-util = "0.1"
+hyper = { version = "1", features = ["server", "client", "http1", "http2"] }
+# RED-TEAM FIX (C-01): HTTPS support for upstream connections.
+# Previously used build_http() which only supported plaintext HTTP,
+# meaning all injected credentials traveled in cleartext to the upstream.
+hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2", "ring", "tls12", "webpki-tokio", "logging"] }
+hyper-util = { version = "0.1", features = ["tokio", "server", "server-auto", "client", "client-legacy", "http1", "http2"] }
+secrecy = "0.10"
+subtle = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+arbiter-audit = { path = "../arbiter-audit" }
+arbiter-credential = { path = "../arbiter-credential" }
+arbiter-behavior = { path = "../arbiter-behavior" }
+arbiter-identity = { path = "../arbiter-identity" }
+arbiter-lifecycle = { path = "../arbiter-lifecycle" }
+arbiter-mcp = { path = "../arbiter-mcp" }
+arbiter-metrics = { path = "../arbiter-metrics" }
+arbiter-oauth = { path = "../arbiter-oauth" }
+arbiter-policy = { path = "../arbiter-policy" }
+arbiter-proxy = { path = "../arbiter-proxy" }
+arbiter-session = { path = "../arbiter-session" }
+arbiter-storage = { path = "../arbiter-storage" }
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+tempfile = "3"
+tokio = { version = "1", features = ["full", "test-util"] }
+
+[[bench]]
+name = "throughput"
+harness = false

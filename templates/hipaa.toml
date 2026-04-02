@@ -1,0 +1,156 @@
+# Arbiter Policy Template: HIPAA Compliance
+#
+# HIPAA (Health Insurance Portability and Accountability Act) protects
+# individually identifiable health information (PHI). From an AI agent
+# governance perspective, the key requirements are:
+#
+#   - PHI access control: only agents with explicit "phi-authorized"
+#     capability may access tools that handle patient data.
+#   - Minimum necessary: agents should access only the data required
+#     for their declared purpose.
+#   - Audit trail: every access to patient data must be logged
+#     (Arbiter default; configure redaction_patterns for PHI fields).
+#   - Export/transmission controls: tools that export, download, or
+#     transfer data are denied unless explicitly authorized.
+#   - Anonymized data: aggregated or de-identified data may be accessed
+#     by agents with lower trust levels.
+#
+# Usage:
+#   [policy]
+#   file = "templates/hipaa.toml"
+#
+# Pair with these config settings for full HIPAA coverage:
+#   [sessions]
+#   require_session = true
+#   [audit]
+#   enabled = true
+#   redaction_patterns = ["ssn", "dob", "mrn", "patient_name", "address",
+#                         "phone", "email", "insurance_id"]
+
+# ---------------------------------------------------------------------------
+# Policy 1: Allow access to anonymized/aggregated data
+# ---------------------------------------------------------------------------
+# Any agent at basic trust or above can access de-identified, aggregated
+# datasets. These tools return population-level statistics, not individual
+# patient records, satisfying the HIPAA Safe Harbor de-identification
+# standard (45 CFR 164.514(b)).
+[[policies]]
+id = "hipaa-allow-anonymized-data"
+effect = "allow"
+allowed_tools = [
+    "query_aggregate_stats",
+    "get_population_metrics",
+    "list_anonymized_records",
+    "get_department_summary",
+    "query_clinical_trends",
+]
+priority = 20
+
+[policies.agent_match]
+trust_level = "basic"
+
+# ---------------------------------------------------------------------------
+# Policy 2: Deny PHI access without authorization
+# ---------------------------------------------------------------------------
+# Tools that access individual patient records are denied unless the
+# agent possesses the "phi-authorized" capability. This enforces the
+# HIPAA Minimum Necessary Rule (45 CFR 164.502(b)) by requiring an
+# explicit capability grant rather than relying on trust level alone.
+[[policies]]
+id = "hipaa-deny-phi-unauthorized"
+effect = "deny"
+allowed_tools = [
+    "get_patient_record",
+    "query_patient_data",
+    "read_medical_history",
+    "get_lab_results",
+    "read_prescriptions",
+    "get_insurance_details",
+]
+priority = 100
+
+# ---------------------------------------------------------------------------
+# Policy 3: Allow PHI access for authorized agents
+# ---------------------------------------------------------------------------
+# Agents with "phi-authorized" capability and at least "verified" trust
+# may access individual patient records. Intent must include recognized
+# clinical or administrative terms to ensure access is purpose-limited.
+[[policies]]
+id = "hipaa-allow-phi-authorized"
+effect = "allow"
+allowed_tools = [
+    "get_patient_record",
+    "query_patient_data",
+    "read_medical_history",
+    "get_lab_results",
+    "read_prescriptions",
+    "get_insurance_details",
+]
+priority = 150
+
+[policies.agent_match]
+trust_level = "verified"
+capabilities = ["phi-authorized"]
+
+[policies.intent_match]
+regex = "(?i)(medical|clinical|treatment|diagnosis|prescription|patient care|administrative|billing|referral)"
+
+# ---------------------------------------------------------------------------
+# Policy 4: Deny data export/transfer for unauthorized agents
+# ---------------------------------------------------------------------------
+# Export, download, and transfer tools are categorically denied unless
+# the agent has both "phi-authorized" and "data-export" capabilities.
+# This satisfies HIPAA transmission security requirements
+# (45 CFR 164.312(e)(1)).
+[[policies]]
+id = "hipaa-deny-export-unauthorized"
+effect = "deny"
+allowed_tools = [
+    "export_patient_data",
+    "download_records",
+    "transfer_data",
+    "send_report",
+    "bulk_export",
+    "email_records",
+]
+priority = 200
+
+# ---------------------------------------------------------------------------
+# Policy 5: Escalate access to records-related tools
+# ---------------------------------------------------------------------------
+# Any tool that reads or modifies records (even if otherwise allowed)
+# is flagged for human review. This provides an additional safeguard
+# layer consistent with HIPAA's administrative safeguard requirements
+# (45 CFR 164.308(a)(1)(ii)(D), information system activity review).
+[[policies]]
+id = "hipaa-escalate-records-access"
+effect = "escalate"
+allowed_tools = [
+    "modify_patient_record",
+    "update_medical_history",
+    "create_patient_record",
+    "merge_patient_records",
+    "amend_record",
+]
+priority = 180
+
+[policies.agent_match]
+trust_level = "verified"
+capabilities = ["phi-authorized"]
+
+# ---------------------------------------------------------------------------
+# Policy 6: Deny deletion of medical records
+# ---------------------------------------------------------------------------
+# HIPAA requires retention of medical records and audit trails. No agent,
+# regardless of trust or capability, may delete patient records or audit
+# logs. Satisfies 45 CFR 164.530(j), retention requirements.
+[[policies]]
+id = "hipaa-deny-record-deletion"
+effect = "deny"
+allowed_tools = [
+    "delete_patient_record",
+    "purge_medical_history",
+    "delete_audit_logs",
+    "clear_records",
+]
+priority = 300

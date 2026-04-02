@@ -1,0 +1,135 @@
+# Arbiter Configuration
+# Copy this file to arbiter.toml and adjust for your environment.
+
+# ─── Proxy ───────────────────────────────────────────────────────────
+[proxy]
+# Address the proxy listens on.
+listen_addr = "0.0.0.0"
+# Port the proxy listens on.
+listen_port = 8080
+# Upstream MCP server URL.
+upstream_url = "http://127.0.0.1:8081"
+# Paths to block (exact match). Requests to these paths return 403.
+# blocked_paths = ["/admin"]
+# Require a valid x-arbiter-session header for MCP traffic.
+# When true, MCP requests without a session header are denied.
+require_session = true
+# Reject non-MCP POST traffic when session enforcement is active.
+# When true, POST requests with non-JSON-RPC bodies are denied.
+strict_mcp = true
+# Deny non-POST HTTP methods (GET, PUT, DELETE, PATCH) with 405.
+# MCP is POST-only; non-POST methods bypass session/policy/behavior checks.
+# Set to false only if you intentionally proxy non-MCP REST traffic.
+deny_non_post_methods = true
+
+# ─── OAuth (optional) ───────────────────────────────────────────────
+# Uncomment to enable JWT validation against an identity provider.
+#
+# [oauth]
+# jwks_cache_ttl_secs = 3600
+#
+# [[oauth.issuers]]
+# name = "keycloak"
+# issuer_url = "http://keycloak:8080/realms/arbiter"
+# jwks_uri = "http://keycloak:8080/realms/arbiter/protocol/openid-connect/certs"
+# audiences = ["arbiter-api"]
+# # Optional: token introspection endpoint (RFC 7662)
+# # introspection_url = "http://keycloak:8080/realms/arbiter/protocol/openid-connect/token/introspect"
+# # client_id = "arbiter"
+# # client_secret = "change-me"
+
+# ─── Policy ──────────────────────────────────────────────────────────
+[policy]
+# Path to a TOML policy file (relative or absolute).
+# file = "policies.toml"
+# Or define policies inline (see docs/policy-language.md).
+#
+# Enable automatic file-system watching for hot-reload (REQ-005).
+# Only applies when `file` is set. When the file changes on disk,
+# it is re-read, parsed, validated, and atomically swapped. In-flight
+# requests complete under the old policy; new requests get the new one.
+watch = false
+# Debounce interval (ms) for the file watcher. Rapid-fire filesystem
+# events within this window are coalesced into a single reload.
+watch_debounce_ms = 500
+
+# ─── Sessions ────────────────────────────────────────────────────────
+[sessions]
+# Default time limit for task sessions (seconds).
+default_time_limit_secs = 3600
+# Default maximum tool calls per session.
+default_call_budget = 1000
+# Whether behavioral anomalies should escalate to deny (hard block).
+# escalate_anomalies = false
+# Percentage threshold for session budget/time warnings.
+# When remaining budget or time drops to this percentage or below,
+# X-Arbiter-Warning headers are emitted. Default: 20.0 (20%).
+# warning_threshold_pct = 20.0
+# Duration of the sliding rate-limit window in seconds.
+# rate_limit_window_secs = 60
+# Interval in seconds for expired session cleanup.
+# cleanup_interval_secs = 60
+
+# ─── Audit ───────────────────────────────────────────────────────────
+[audit]
+# Enable audit logging.
+enabled = true
+# Deny all traffic when the audit sink is degraded (disk full, write failures).
+# Prevents attackers from blinding the audit trail before operating undetected.
+require_healthy = true
+# Append-only audit log file path.
+# file_path = "/var/log/arbiter/audit.jsonl"
+# Sensitive field patterns for argument redaction (case-insensitive).
+redaction_patterns = ["password", "secret", "token", "key", "authorization", "credential"]
+# Enable BLAKE3 hash-chained audit records for tamper detection.
+# When true, each audit record includes a monotonic sequence number and
+# a BLAKE3 hash linking it to the previous record. Detect tampering,
+# insertion, and deletion with `arbiter-ctl audit verify --file <path>`.
+hash_chain = false
+
+# ─── Credentials ─────────────────────────────────────────────────────
+# Configure credential injection so agents never see raw upstream secrets.
+# Credentials are resolved from pluggable backends and injected into
+# request bodies, replacing ${CRED:ref} patterns. Response bodies are
+# scrubbed to prevent credential leakage back to agents.
+#
+# [credentials]
+# # Provider type: "file" or "env".
+# provider = "file"
+# # Path to TOML credentials file (when provider = "file").
+# # Format: [credentials] section with key = "secret-value" entries.
+# file_path = "credentials.toml"
+# # Environment variable prefix (when provider = "env").
+# # Credentials are discovered from vars matching ${prefix}_ and
+# # resolved by exact env var name in ${CRED:VAR_NAME} patterns.
+# env_prefix = "ARBITER_CRED"
+
+# ─── Storage ─────────────────────────────────────────────────────────
+[storage]
+# Backend: "memory" (default, backward-compatible) or "sqlite".
+# SQLite requires the 'sqlite' feature: cargo build --features sqlite
+backend = "memory"
+# Path to the SQLite database file (only used when backend = "sqlite").
+# sqlite_path = "arbiter.db"
+
+# ─── Metrics ─────────────────────────────────────────────────────────
+[metrics]
+# Enable the /metrics Prometheus endpoint on the proxy.
+enabled = true
+# Require admin API key for /metrics. Prevents reconnaissance via
+# tool call names, allow/deny rates, and active session counts.
+# require_auth = false
+
+# ─── Admin API ───────────────────────────────────────────────────────
+[admin]
+# Address the admin/lifecycle API listens on.
+listen_addr = "0.0.0.0"
+# Port for the admin API (separate from the proxy).
+listen_port = 3000
+# API key for admin endpoints (passed via x-api-key header).
+api_key = "arbiter-dev-key"
+# HMAC secret for signing agent JWTs. CHANGE THIS IN PRODUCTION.
+signing_secret = "arbiter-dev-secret-change-in-production"
+# Token validity duration (seconds).
+token_expiry_secs = 3600
+

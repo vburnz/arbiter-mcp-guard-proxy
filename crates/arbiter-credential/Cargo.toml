@@ -1,0 +1,31 @@
+[package]
+name = "arbiter-credential"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Credential resolution and injection middleware for the Arbiter proxy"
+
+[dependencies]
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+secrecy = { version = "0.10", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["fs", "io-util", "sync"] }
+toml = "0.8"
+tracing = "0.1"
+uuid = { version = "1", features = ["v4", "serde"] }
+zeroize = "1"
+
+[dev-dependencies]
+arbiter-session = { path = "../arbiter-session" }
+criterion = "0.5"
+proptest = "1"
+tempfile = "3"
+tokio = { version = "1", features = ["full"] }
+
+[[bench]]
+name = "credential_ops"
+harness = false

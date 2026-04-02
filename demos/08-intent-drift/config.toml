@@ -1,0 +1,35 @@
+# Demo 08: Intent Drift
+# Behavioral anomaly detection with escalation to deny.
+# Session declares read-only intent, agent tries a write operation.
+
+[proxy]
+listen_addr = "127.0.0.1"
+listen_port = 8080
+upstream_url = "http://127.0.0.1:8081"
+require_session = true
+strict_mcp = true
+
+[sessions]
+default_time_limit_secs = 3600
+default_call_budget = 100
+escalate_anomalies = true
+
+[audit]
+enabled = true
+
+[metrics]
+enabled = true
+
+[admin]
+listen_addr = "127.0.0.1"
+listen_port = 3000
+api_key = "demo-key"
+signing_secret = "demo-secret"
+token_expiry_secs = 3600
+
+# Allow both read and write tools (policy level permits them).
+# The behavioral anomaly detector will catch the intent mismatch.
+[[policy.policies]]
+id = "allow-all-file-ops"
+effect = "allow"
+allowed_tools = ["read_file", "list_dir", "write_file", "delete_file"]

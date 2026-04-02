@@ -1,0 +1,30 @@
+[package]
+name = "arbiter-lifecycle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Agent lifecycle HTTP API for Arbiter"
+
+[dependencies]
+axum = { version = "0.8", features = ["json"] }
+chrono = { version = "0.4", features = ["serde"] }
+jsonwebtoken = "9"
+arbiter-audit = { path = "../arbiter-audit" }
+arbiter-identity = { path = "../arbiter-identity" }
+arbiter-mcp = { path = "../arbiter-mcp" }
+arbiter-metrics = { path = "../arbiter-metrics" }
+arbiter-policy = { path = "../arbiter-policy" }
+arbiter-session = { path = "../arbiter-session" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+subtle = "2"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+hyper = { version = "1", features = ["client", "http1"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+tokio = { version = "1", features = ["full", "test-util"] }

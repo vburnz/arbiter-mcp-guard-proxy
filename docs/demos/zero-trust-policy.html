@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deny-by-Default: Why AI Agents Need Zero Trust | Arbiter Security</title>
+  <meta name="description" content="How Arbiter's deny-by-default policy engine enforces zero trust for AI agents. No matching Allow policy means no access, regardless of session validity. Full policy trace included.">
+  <meta name="keywords" content="zero trust AI agents, deny-by-default policy, AI agent authorization, policy engine, principal matching, MCP security, agent identity">
+  <meta property="og:title" content="Deny-by-Default: Why AI Agents Need Zero Trust | Arbiter">
+  <meta property="og:description" content="An agent passes session checks but has no matching Allow policy. Arbiter's deny-by-default engine blocks it with 403 POLICY_DENIED and a full trace showing why.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://cyrenei.github.io/arbiter-mcp-firewall/demos/zero-trust-policy">
+  <link rel="canonical" href="https://cyrenei.github.io/arbiter-mcp-firewall/demos/zero-trust-policy">
+  <link rel="stylesheet" href="../styles/a11y.css">
+  <style>
+    :root {
+      --bg: #0a0e17;
+      --surface: #111827;
+      --surface-alt: #1a2235;
+      --border: #1e293b;
+      --border-bright: #334155;
+      --text: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-dim: #64748b;
+      --accent: #3b82f6;
+      --accent-bright: #60a5fa;
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.12);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.12);
+      --purple: #a78bfa;
+      --cyan: #22d3ee;
+      --mono: "SF Mono", "Fira Code", "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; -webkit-font-smoothing: antialiased; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+    .narrow { max-width: 720px; margin: 0 auto; }
+    section { padding: 80px 0; }
+    section + section { border-top: 1px solid var(--border); }
+
+    h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.15; letter-spacing: -0.03em; }
+    h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 24px; }
+    h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; }
+    p { color: var(--text-secondary); margin-bottom: 16px; }
+    .lead { font-size: 1.15rem; line-height: 1.8; }
+    a { color: var(--accent-bright); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(10, 14, 23, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 14px 0; }
+    nav .container { display: flex; align-items: center; justify-content: space-between; }
+    nav .logo { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+    nav .logo span { color: var(--accent-bright); }
+    nav .links { display: flex; gap: 24px; }
+    nav .links a { color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; }
+    nav .links a:hover { color: var(--text); text-decoration: none; }
+
+    .hero { padding: 100px 0 60px; text-align: center; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; background: radial-gradient(circle, rgba(239,68,68,0.06) 0%, transparent 70%); pointer-events: none; }
+    .hero .demo-num { font-family: var(--mono); font-size: 0.78rem; color: var(--red); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 16px; display: block; }
+    .hero h1 { margin-bottom: 20px; }
+    .hero .subtitle { font-size: 1.15rem; color: var(--text-secondary); max-width: 620px; margin: 0 auto; line-height: 1.8; }
+
+    .code-block { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 24px 0; }
+    .code-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: var(--surface-alt); border-bottom: 1px solid var(--border); font-size: 0.8rem; color: var(--text-dim); }
+    .code-header .filename { font-family: var(--mono); font-weight: 600; color: var(--text-secondary); }
+    .code-body { padding: 18px; overflow-x: auto; font-family: var(--mono); font-size: 0.82rem; line-height: 1.65; color: var(--text-secondary); }
+    .code-body .line { display: block; white-space: pre; }
+    .syn-comment { color: var(--text-dim); font-style: italic; }
+    .syn-str { color: var(--green); }
+    .syn-key { color: var(--purple); }
+    .syn-red { color: var(--red); font-weight: 600; }
+    .syn-green { color: var(--green); font-weight: 600; }
+
+    .defense-box { background: var(--surface); border: 1px solid rgba(34, 197, 94, 0.2); border-left: 4px solid var(--green); border-radius: 0 10px 10px 0; padding: 24px 28px; margin: 24px 0; }
+    .defense-box h3 { color: var(--green); margin-bottom: 8px; }
+
+    .nav-demos { display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); }
+    .nav-demos a { font-size: 0.9rem; font-weight: 500; }
+
+    footer { text-align: center; padding: 28px 0; color: var(--text-dim); font-size: 0.82rem; border-top: 1px solid var(--border); }
+    footer a { color: var(--accent); }
+
+    .reveal { opacity: 0; transform: translateY(28px); transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+<a href="#main" class="skip-nav">Skip to main content</a>
+
+<nav>
+  <div class="container">
+    <a href="../index.html" class="logo" style="text-decoration:none;"><span>Arbiter</span></a>
+    <div class="links">
+      <a href="../index.html">Home</a>
+      <a href="index.html">Demos</a>
+      <a href="../case-study.html">Case Study</a>      <a href="https://github.com/cyrenei/arbiter-mcp-firewall" class="cta-nav">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+<section class="hero">
+  <div class="container">
+    <span class="demo-num">Demo 06 of 10</span>
+    <h1>Deny-by-Default:<br>Why AI Agents Need Zero Trust</h1>
+    <p class="subtitle">
+      A rogue contractor's agent passes session checks and has the tool in its whitelist.
+      But the policy engine finds no matching Allow rule. Deny-by-default blocks the request
+      with a full policy trace.
+    </p>
+  </div>
+</section>
+
+<!-- THE ATTACK -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Attack</h2>
+    <p class="lead">
+      Session whitelisting controls which tools an agent can call. But it does not
+      control which agents can call which tools with which parameters for which principals.
+      That is the job of the policy engine.
+    </p>
+    <p>
+      In this scenario, a single Allow policy permits
+      <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">deploy_service</code>
+      only when the principal is
+      <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">user:trusted-team</code>
+      and the intent contains the keyword "deploy". An attacker registers an agent owned by
+      <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">user:rogue-contractor</code>
+      and creates a session with deploy_service in the whitelist.
+    </p>
+    <p>
+      The session check passes -- the tool is in the whitelist. But the policy engine evaluates
+      all policies and finds no match. The principal criterion requires
+      <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">user:trusted-team</code>,
+      not <code style="font-family: var(--mono); background: var(--surface-alt); padding: 2px 6px; border-radius: 4px;">user:rogue-contractor</code>.
+      With deny-by-default, no matching Allow policy means no access.
+    </p>
+  </div>
+</section>
+
+<!-- THE DEMO -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Demo</h2>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">config.toml</span>
+        <span>Policy: only trusted-team can deploy</span>
+      </div>
+      <div class="code-body">
+<span class="line"><span class="syn-comment"># Only agents owned by "user:trusted-team" can deploy.</span></span>
+<span class="line"><span class="syn-comment"># All other agents hit deny-by-default.</span></span>
+<span class="line">[[policy.policies]]</span>
+<span class="line">id = <span class="syn-str">"allow-trusted-deploy"</span></span>
+<span class="line">effect = <span class="syn-str">"allow"</span></span>
+<span class="line">allowed_tools = [<span class="syn-str">"deploy_service"</span>]</span>
+<span class="line"></span>
+<span class="line">[policy.policies.principal_match]</span>
+<span class="line">sub = <span class="syn-str">"user:trusted-team"</span></span>
+<span class="line"></span>
+<span class="line">[policy.policies.intent_match]</span>
+<span class="line">keywords = [<span class="syn-str">"deploy"</span>]</span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">attack.sh</span>
+        <span>rogue-contractor tries deploy_service</span>
+      </div>
+      <div class="code-body">
+<span class="line"><span class="syn-comment"># Agent registered with owner: "user:rogue-contractor"</span></span>
+<span class="line"><span class="syn-comment"># Session has deploy_service in authorized_tools</span></span>
+<span class="line">curl -s -X POST http://127.0.0.1:8080 \</span>
+<span class="line">  -H "Content-Type: application/json" \</span>
+<span class="line">  -H "x-arbiter-session: $SESSION_ID" \</span>
+<span class="line">  -H "Authorization: Bearer $TOKEN" \</span>
+<span class="line">  -H "x-delegation-chain: <span class="syn-red">user:rogue-contractor</span>&gt;$AGENT_ID" \</span>
+<span class="line">  -d '{</span>
+<span class="line">    "jsonrpc": "2.0",</span>
+<span class="line">    "id": 1,</span>
+<span class="line">    "method": "tools/call",</span>
+<span class="line">    "params": {</span>
+<span class="line">      "name": "deploy_service",</span>
+<span class="line">      "arguments": {</span>
+<span class="line">        "service": "payment-gateway",</span>
+<span class="line">        "environment": "production",</span>
+<span class="line">        "version": "9.9.9-backdoor"</span>
+<span class="line">      }</span>
+<span class="line">    }</span>
+<span class="line">  }'</span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">response</span>
+        <span>HTTP 403</span>
+      </div>
+      <div class="code-body">
+<span class="line">{</span>
+<span class="line">  <span class="syn-key">"error"</span>: <span class="syn-str">"POLICY_DENIED"</span>,</span>
+<span class="line">  <span class="syn-key">"message"</span>: <span class="syn-str">"No matching Allow policy for this tool call"</span>,</span>
+<span class="line">  <span class="syn-key">"policy_trace"</span>: {</span>
+<span class="line">    <span class="syn-key">"evaluated"</span>: 1,</span>
+<span class="line">    <span class="syn-key">"matched"</span>: 0,</span>
+<span class="line">    <span class="syn-key">"reason"</span>: <span class="syn-str">"principal_match.sub: expected 'user:trusted-team', got 'user:rogue-contractor'"</span></span>
+<span class="line">  }</span>
+<span class="line">}</span>
+      </div>
+    </div>
+
+    <p style="font-size: 0.88rem; color: var(--text-dim);">
+      The policy trace in the response shows exactly which policies were evaluated,
+      why each failed, and what criteria would need to match. This transparency
+      helps operators debug policy configurations without guessing.
+    </p>
+  </div>
+</section>
+
+<!-- THE DEFENSE -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>The Defense</h2>
+    <p>
+      Arbiter stops this attack at <strong style="color: var(--text);">Stage 8</strong>:
+      policy evaluation in the arbiter-policy crate.
+    </p>
+
+    <div class="defense-box">
+      <h3>arbiter-policy -- Deny-by-Default Engine (Stage 8)</h3>
+      <p style="margin: 0; color: var(--text-secondary); font-size: 0.92rem;">
+        The policy engine evaluates all configured policies against the incoming request. Each
+        policy can match on tool name, principal identity (via delegation chain), intent keywords,
+        and parameter constraints. Policies are ranked by specificity score: more specific rules
+        take priority over broader ones. If no Allow policy matches, the default action is
+        <strong style="color: var(--text);">deny</strong>. The engine returns a structured trace
+        showing why each policy was skipped, which makes policy debugging deterministic
+        rather than trial-and-error.
+      </p>
+    </div>
+
+    <p>
+      This is a critical distinction from traditional allow-by-default systems. In a zero-trust
+      model, the administrator must explicitly grant access. Forgetting to write a policy results
+      in no access, not unrestricted access. This is the correct failure mode for security
+      infrastructure.
+    </p>
+  </div>
+</section>
+
+<!-- TRY IT YOURSELF -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>Try It Yourself</h2>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">terminal</span>
+        <span>Run the demo locally</span>
+      </div>
+      <div class="code-body">
+<span class="line">git clone https://github.com/cyrenei/arbiter-mcp-firewall</span>
+<span class="line">cd arbiter && cargo build --release</span>
+<span class="line">cd demos/06-zero-trust-policy</span>
+<span class="line">bash demo.sh</span>
+      </div>
+    </div>
+    <p style="font-size: 0.88rem; color: var(--text-dim);">
+      The script registers a rogue-contractor agent, creates a session with deploy_service,
+      and shows the policy engine deny the request with a full trace.
+    </p>
+  </div>
+</section>
+
+<!-- FURTHER READING -->
+<section class="reveal">
+  <div class="container narrow">
+    <h2>Further Reading</h2>
+    <p>
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall">Arbiter on GitHub</a> --
+      source code, architecture docs, and quickstart guide.
+    </p>
+    <p>
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall/blob/main/crates/arbiter-policy/src/eval.rs">policy eval source</a> --
+      the deny-by-default evaluation engine with specificity scoring.
+    </p>
+
+    <div class="nav-demos">
+      <a href="session-replay.html">&larr; Prev: Session Replay</a>
+      <a href="parameter-tampering.html">Next: Parameter Tampering &rarr;</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>
+      Apache 2.0 &middot;
+      <a href="https://github.com/cyrenei/arbiter-mcp-firewall">GitHub</a> &middot;
+      <a href="../case-study.html">Case Study</a> &middot;
+      <a href="./">All Demos</a> &middot;
+      <a href="../index.html">Home</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.08, rootMargin: '0px 0px -50px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

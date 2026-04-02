@@ -1,0 +1,56 @@
+# Arbiter Configuration: QuantumBank Financial Services Scenario
+# Demonstrates: Deny-by-default authorization, drift detection,
+# session management, and structured audit logging.
+
+[proxy]
+listen_addr = "127.0.0.1"
+listen_port = 8080
+upstream_url = "http://127.0.0.1:8081"
+
+[sessions]
+default_time_limit_secs = 1800
+default_call_budget = 50
+escalate_anomalies = true
+
+[audit]
+enabled = true
+file_path = "/tmp/arbiter-scenario-audit.jsonl"
+redaction_patterns = ["password", "secret", "token", "key", "ssn", "account_number", "credit_card", "dob"]
+
+[metrics]
+enabled = true
+
+[admin]
+listen_addr = "127.0.0.1"
+listen_port = 3000
+api_key = "qb-admin-key-2026"
+signing_secret = "quantumbank-scenario-secret"
+token_expiry_secs = 3600
+
+# Policy engine: tool-level authorization for risk analysis agents.
+[[policy.policies]]
+id = "allow-risk-read-tools"
+effect = "allow"
+allowed_tools = ["query_transactions", "generate_risk_report"]
+[policy.policies.intent_match]
+keywords = ["analyze"]
+
+[[policy.policies]]
+id = "deny-data-export"
+effect = "deny"
+allowed_tools = ["export_customer_data"]
+
+[[policy.policies]]
+id = "deny-financial-modification"
+effect = "deny"
+allowed_tools = ["modify_account_balance"]
+
+[[policy.policies]]
+id = "deny-privilege-escalation"
+effect = "deny"
+allowed_tools = ["create_admin_agent"]
+
+[[policy.policies]]
+id = "deny-audit-tampering"
+effect = "deny"
+allowed_tools = ["delete_audit_logs"]
