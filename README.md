@@ -14,11 +14,11 @@ AI agents act autonomously at machine speed. A single misconfigured agent
 can run DDL on production databases, export customer data, or escalate
 privileges, with nobody in the loop to stop it.
 
-Traditional IAM was built for humans who log in, make decisions, and log out.
-It doesn't handle agents that fire hundreds of tool calls per session and can
-reason their way into destructive actions on stale data.
+Applications like Claude Code let us define permissions. But that requires us to place trust
+in Claude Code. It should go without saying: **do not trust the dispensary guy to
+tell you what to take for back pain; ask him to help you take an edge off.**
 
-Arbiter sits in the request path and enforces:
+Arbiter is agnostic of development tooling and enforces:
 
 - **What** an agent can do (deny-by-default tool allowlists)
 - **How much** it can do (session time limits and call budgets)
@@ -34,9 +34,9 @@ showing 2 allowed and 4 blocked tool categories.
 
 Arbiter governs what agents are **allowed** to do.
 It does not govern what agents **might try** to do. It protects the platform by
-reducing the tool-call attack surface that agentic applications typically leave open, or 
+reducing the tool-call attack surface that agentic applications typically leave open, or
 require. This is valuable. But a clever enough hacker with sinister-enough intentions
-will be able to deceives a model into breaking it. That's a far deeper problem requiring 
+will be able to deceive a model into breaking it. That's a far deeper problem requiring
 greater compute than a proxy can performantly handle.
 
 ## Who is Arbiter for?
@@ -57,10 +57,9 @@ at your own risk. There are no paid tiers, no license keys, and no gated
 features. Everything in this repository is free and open source under
 Apache 2.0.
 
-## Support Arbiter
+## Sponsor
 
-Your support makes a difference and helps us offer our products free of charge. While not required,
-if you want to help, feel free throw a few dollars our way; it's deeply appreciated and we will see it makes it's way to a more secure internet.
+This is free software with no paid tiers. If you get value from it and want to help keep it going, consider sponsoring.
 
 **[Sponsor on GitHub](https://github.com/sponsors/cyrenei)**
 
