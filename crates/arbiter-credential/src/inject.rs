@@ -94,6 +94,15 @@ pub fn scrub_response(body: &str, known_values: &[SecretString]) -> String {
         if value.is_empty() {
             continue;
         }
+        if value.len() < 4 {
+            // Warn about short credentials that risk over-scrubbing.
+            // Values under 4 chars match too many substrings, but we still
+            // scrub them because failing to scrub a real credential is worse.
+            tracing::debug!(
+                len = value.len(),
+                "scrubbing short credential value; consider using longer secrets"
+            );
+        }
         scrub_single_value(&mut scrubbed, value);
     }
     scrubbed
@@ -184,6 +193,29 @@ fn scrub_single_value(scrubbed: &mut String, value: &str) {
         warn!("double-URL-encoded credential value detected in response body, scrubbing");
         *scrubbed = scrubbed.replace(&double_url_encoded, REDACTED);
     }
+    // HTML entity encoded variants (decimal and hex).
+    // A malicious upstream could embed credentials as &#78;&#79; or &#x4E;&#x4F;
+    // in HTML responses to evade direct string matching.
+    let html_decimal = html_entity_encode_decimal(value);
+    if scrubbed.contains(&html_decimal) {
+        warn!("HTML-entity-encoded (decimal) credential value detected in response body, scrubbing");
+        *scrubbed = scrubbed.replace(&html_decimal, REDACTED);
+    }
+    let html_hex = html_entity_encode_hex(value);
+    if html_hex != html_decimal && scrubbed.contains(&html_hex) {
+        warn!("HTML-entity-encoded (hex) credential value detected in response body, scrubbing");
+        *scrubbed = scrubbed.replace(&html_hex, REDACTED);
+    }
+}
+
+/// HTML decimal entity encoding (&#DDD; per character).
+fn html_entity_encode_decimal(input: &str) -> String {
+    input.bytes().map(|b| format!("&#{};", b)).collect()
+}
+
+/// HTML hex entity encoding (&#xHH; per character).
+fn html_entity_encode_hex(input: &str) -> String {
+    input.bytes().map(|b| format!("&#x{:02X};", b)).collect()
 }
 
 /// Simple percent-encoding for credential scrubbing.

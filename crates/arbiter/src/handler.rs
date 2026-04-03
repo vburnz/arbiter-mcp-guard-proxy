@@ -80,7 +80,7 @@ pub struct ArbiterState {
     /// Key: agent_id, Value: (accumulated count, last increment timestamp).
     /// Counter halves every `ANOMALY_DECAY_INTERVAL` since last increment.
     pub anomaly_counts:
-        std::sync::Mutex<std::collections::HashMap<uuid::Uuid, (u32, std::time::Instant)>>,
+        tokio::sync::Mutex<std::collections::HashMap<uuid::Uuid, (u32, std::time::Instant)>>,
     /// Threshold of anomaly flags before trust degradation triggers.
     pub trust_degradation_threshold: u32,
 }
@@ -142,7 +142,7 @@ impl ArbiterState {
             max_response_body_bytes,
             upstream_timeout: std::time::Duration::from_secs(upstream_timeout_secs),
             require_audit_healthy,
-            anomaly_counts: std::sync::Mutex::new(std::collections::HashMap::new()),
+            anomaly_counts: tokio::sync::Mutex::new(std::collections::HashMap::new()),
             trust_degradation_threshold: 5,
         }
     }
@@ -293,8 +293,12 @@ pub async fn handle_request(
         }
     };
 
-    // ── Stage 5: OAuth (skipped if no Authorization header) ─────────
-    // OAuth validation happens in the middleware chain if configured.
+    // ── Stage 5: OAuth ──────────────────────────────────────────────
+    // NOTE: OAuth middleware exists (arbiter-oauth crate) but is not yet
+    // wired into the proxy request path. Agent identity is currently
+    // established by the x-agent-id header (advisory, not cryptographic).
+    // When OAuth is integrated, cross-reference claims.sub with the
+    // session's agent owner to close the identity binding gap (RT-303/RT-312).
 
     // ── Stage 6: Buffer body + MCP Parse ────────────────────────────
     let (mut parts, body) = req.into_parts();
@@ -442,9 +446,37 @@ pub async fn handle_request(
             .await);
         } else {
             // Operator explicitly opted into forwarding non-POST methods.
-            // Log as explicit allow decision -- never silent, never "passthrough".
+            // Require x-agent-id header for identity attribution even though
+            // session/policy/behavior checks are not applied. This prevents
+            // fully anonymous access to the upstream via non-POST methods.
+            if agent_id_header.is_empty() {
+                tracing::warn!(
+                    %method, %path,
+                    "non-POST method denied: x-agent-id required for identity attribution"
+                );
+                return Ok(deny(
+                    &state,
+                    capture,
+                    request_id,
+                    request_start,
+                    StatusCode::BAD_REQUEST,
+                    None,
+                    ArbiterError {
+                        code: ErrorCode::MiddlewareRejected,
+                        message: "x-agent-id header required".into(),
+                        detail: Some(
+                            "Non-POST requests require an x-agent-id header for audit attribution."
+                                .into(),
+                        ),
+                        hint: None,
+                        request_id: Some(request_id.to_string()),
+                        policy_trace: None,
+                    },
+                )
+                .await);
+            }
             tracing::info!(
-                %method, %path,
+                %method, %path, agent_id = %agent_id_header,
                 "non-POST method forwarded (deny_non_post_methods = false); \
                  session/policy/behavior checks are NOT applied"
             );
@@ -647,6 +679,12 @@ pub async fn handle_request(
             .await);
         }
 
+        // Use the session's delegation chain snapshot for audit instead of
+        // the client-supplied header, which is advisory and unverified.
+        if !session.delegation_chain_snapshot.is_empty() {
+            capture.set_delegation_chain(&session.delegation_chain_snapshot.join(","));
+        }
+
         Some(session)
     } else {
         None
@@ -838,10 +876,7 @@ pub async fn handle_request(
                 std::time::Duration::from_secs(3600);
             if let Ok(agent_uuid) = agent_id_header.parse::<uuid::Uuid>() {
                 let should_demote = {
-                    let mut counts = state
-                        .anomaly_counts
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner());
+                    let mut counts = state.anomaly_counts.lock().await;
                     let now = std::time::Instant::now();
                     let (count, last_time) = counts.entry(agent_uuid).or_insert((0, now));
                     // Time-based decay: halve the counter for each decay interval elapsed.
@@ -880,10 +915,7 @@ pub async fn handle_request(
                             );
                             let _ = state.registry.update_trust_level(agent_uuid, demoted).await;
                             // Reset counter after demotion.
-                            let mut counts = state
-                                .anomaly_counts
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner());
+                            let mut counts = state.anomaly_counts.lock().await;
                             counts.insert(agent_uuid, (0, std::time::Instant::now()));
                         }
                     }
@@ -1200,9 +1232,7 @@ pub async fn handle_request(
                 // Scan the response body for sensitive data patterns and enforce
                 // the session's data_sensitivity_ceiling. This prevents upstream
                 // services from returning data that exceeds the session's authorization.
-                if let Some(session_id) = parsed_session_id
-                    && let Ok(session) = state.session_store.get(session_id).await
-                {
+                if let Some(ref session) = fetched_session {
                     // Use strict UTF-8 for data classification, consistent with
                     // credential scrubbing (Stage 10.5). Previously used from_utf8_lossy,
                     // which could allow a malicious upstream to hide sensitive data
@@ -1251,7 +1281,7 @@ pub async fn handle_request(
                         if let Some(detected) = max_detected {
                             if detected > ceiling {
                                 tracing::warn!(
-                                    %session_id,
+                                    session_id = %session.session_id,
                                     ?ceiling,
                                     ?detected,
                                     findings = ?finding_descriptions,
@@ -1357,7 +1387,7 @@ pub async fn handle_request(
                     .metrics
                     .observe_upstream_duration(upstream_start.elapsed().as_secs_f64());
                 tracing::error!(error = %e, "upstream request failed");
-                state.metrics.record_request("allow");
+                state.metrics.record_request("error");
                 state
                     .metrics
                     .observe_request_duration(request_start.elapsed().as_secs_f64());
@@ -1481,39 +1511,29 @@ impl ArbiterError {
                 "Create a new session. Session time limits are set at creation time.".to_string(),
             ),
             SessionError::BudgetExceeded {
-                session_id,
-                limit,
-                used,
+                session_id, ..
             } => (
-                format!("session {session_id} budget exhausted ({used}/{limit} calls used)"),
+                format!("session {session_id} budget exhausted"),
                 "Create a new session with a higher call budget.".to_string(),
             ),
             SessionError::ToolNotAuthorized { session_id, tool } => (
-                format!("tool '{tool}' is not in session {session_id}'s authorized set"),
-                "The tool is not authorized for this session. \
-                 Check that the tool is permitted by the applicable policy."
-                    .to_string(),
+                format!("tool '{tool}' is not authorized for session {session_id}"),
+                "Check that the tool is permitted by the applicable policy.".to_string(),
             ),
             SessionError::AlreadyClosed(id) => (
                 format!("session {id} has been closed"),
                 "Create a new session. Closed sessions cannot be reused.".to_string(),
             ),
             SessionError::RateLimited {
-                session_id,
-                limit_per_minute,
+                session_id, ..
             } => (
-                format!(
-                    "session {session_id} rate limited ({limit_per_minute} calls/min exceeded)"
-                ),
+                format!("session {session_id} rate limited"),
                 "Wait before retrying, or create a session with a higher rate limit.".to_string(),
             ),
             SessionError::TooManySessions {
-                agent_id,
-                max,
-                current,
+                agent_id, ..
             } => (
-                format!("agent {agent_id} has {current} active sessions (max {max})"),
-                // Don't expose config key names in hints.
+                format!("agent {agent_id} has too many active sessions"),
                 "Close existing sessions before creating new ones.".to_string(),
             ),
         };

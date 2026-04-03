@@ -145,7 +145,7 @@ pub enum Disposition {
 
 impl Policy {
     /// Compute the specificity score for this policy. Higher = more specific.
-    /// agent_id match (100) > trust_level match (50) > capability match (25 each)
+    /// agent_id match (100) > trust_level match (50) > capability match (25 each, max 3)
     /// principal sub (40) > group (20 each)
     /// intent regex (30) > keywords (10 each)
     pub fn specificity(&self) -> i32 {
@@ -161,7 +161,8 @@ impl Policy {
         if self.agent_match.trust_level.is_some() {
             score += 50;
         }
-        score += self.agent_match.capabilities.len() as i32 * 25;
+        // Cap capability contribution to prevent specificity gaming via capability stacking.
+        score += std::cmp::min(self.agent_match.capabilities.len(), 3) as i32 * 25;
 
         if self.principal_match.sub.is_some() {
             score += 40;

@@ -81,8 +81,8 @@ pub struct ProxySection {
     #[serde(default = "default_max_request_body_bytes")]
     pub max_request_body_bytes: usize,
 
-    /// Maximum response body size in bytes. Responses exceeding this are truncated
-    /// and a warning header is added. Default: 10 MiB.
+    /// Maximum response body size in bytes. Responses exceeding this are rejected
+    /// with 502 Bad Gateway. Default: 10 MiB. Prevents
     /// unbounded response buffering.
     #[serde(default = "default_max_response_body_bytes")]
     pub max_response_body_bytes: usize,
@@ -428,6 +428,10 @@ impl Default for AdminSection {
 #[derive(Debug, Clone, Deserialize)]
 pub struct StorageSection {
     /// Storage backend: "memory" (default) or "sqlite".
+    /// NOTE: The "memory" backend loses all session state on restart,
+    /// including unexpired sessions and their remaining budgets. This means
+    /// agents will need to re-create sessions after a gateway restart.
+    /// Use "sqlite" for production deployments where session persistence matters.
     #[serde(default = "default_storage_backend")]
     pub backend: String,
 
@@ -647,6 +651,15 @@ impl ArbiterConfig {
             ));
         }
 
+        // Non-POST forwarding weakens authorization boundary.
+        if !self.proxy.deny_non_post_methods {
+            warnings.push(ConfigWarning::Warn(
+                "[proxy] deny_non_post_methods = false: non-POST requests bypass session, \
+                 policy, and behavior checks. Only x-agent-id attribution is enforced."
+                    .into(),
+            ));
+        }
+
         // Policy file existence check.
         if let Some(ref path) = self.policy.file
             && !Path::new(path).exists()
@@ -706,7 +719,14 @@ impl ArbiterConfig {
 
         // Storage backend validation.
         match self.storage.backend.as_str() {
-            "memory" | "sqlite" => {}
+            "memory" => {
+                warnings.push(ConfigWarning::Warn(
+                    "[storage] backend = \"memory\": all session state (budgets, rate limits) \
+                     will be lost on restart. Use \"sqlite\" for production deployments."
+                        .into(),
+                ));
+            }
+            "sqlite" => {}
             other => {
                 warnings.push(ConfigWarning::Error(format!(
                     "[storage] backend must be 'memory' or 'sqlite', got '{other}'"
@@ -750,6 +770,19 @@ impl ArbiterConfig {
         if self.sessions.default_time_limit_secs == 0 {
             warnings.push(ConfigWarning::Warn(
                 "[sessions] default_time_limit_secs is 0; all sessions will expire immediately"
+                    .into(),
+            ));
+        }
+
+        // Warn when credential injection is enabled with an HTTP (not HTTPS) upstream.
+        // Credentials injected over plaintext HTTP are visible to network observers.
+        if self.credentials.is_some()
+            && self.proxy.upstream_url.starts_with("http://")
+        {
+            warnings.push(ConfigWarning::Warn(
+                "[proxy] upstream_url uses HTTP with [credentials] enabled; \
+                 injected secrets will be transmitted in plaintext. \
+                 Use HTTPS for production deployments."
                     .into(),
             ));
         }

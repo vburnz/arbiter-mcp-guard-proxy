@@ -754,7 +754,7 @@ async fn admin_api_authentication() {
     let resp = h.client.get(h.admin_url("/agents")).send().await.unwrap();
     assert_eq!(resp.status(), 401, "missing API key should return 401");
 
-    // Wrong API key → 403
+    // Wrong API key → 401 (same as missing, to avoid key-existence oracle)
     let resp = h
         .client
         .get(h.admin_url("/agents"))
@@ -762,7 +762,7 @@ async fn admin_api_authentication() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), 403, "wrong API key should return 403");
+    assert_eq!(resp.status(), 401, "wrong API key should return 401");
 
     // Correct key → 200
     let resp = h

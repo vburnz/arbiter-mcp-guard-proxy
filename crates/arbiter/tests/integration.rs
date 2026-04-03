@@ -3408,7 +3408,10 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
     // DO NOT register an agent or create a session.
     // GET requests should still pass through to upstream.
 
-    // GET request: bypasses ALL MCP enforcement (no session, no policy, no behavior).
+    // Non-POST requests require x-agent-id for identity attribution but
+    // bypass session/policy/behavior checks.
+
+    // GET without x-agent-id → 400.
     let resp = client
         .get(format!(
             "http://127.0.0.1:{proxy_port}/v1/sensitive/admin/data"
@@ -3418,8 +3421,23 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
         .unwrap();
     assert_eq!(
         resp.status(),
+        400,
+        "GET without x-agent-id must be rejected"
+    );
+
+    // GET with x-agent-id → passes through to upstream.
+    let resp = client
+        .get(format!(
+            "http://127.0.0.1:{proxy_port}/v1/sensitive/admin/data"
+        ))
+        .header("x-agent-id", "test-agent")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
         200,
-        "GET request must pass through regardless of policy (by design)"
+        "GET with x-agent-id must pass through regardless of policy"
     );
     let body = resp.text().await.unwrap();
     assert!(
@@ -3427,11 +3445,12 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
         "GET should reach upstream and get echoed: {body}"
     );
 
-    // PUT request: also bypasses enforcement.
+    // PUT request: requires x-agent-id, bypasses enforcement.
     let resp = client
         .put(format!(
             "http://127.0.0.1:{proxy_port}/v1/dangerous/operation"
         ))
+        .header("x-agent-id", "test-agent")
         .body("arbitrary data")
         .send()
         .await
@@ -3439,21 +3458,22 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
     assert_eq!(
         resp.status(),
         200,
-        "PUT request must pass through regardless of policy (by design)"
+        "PUT with x-agent-id must pass through regardless of policy"
     );
 
-    // DELETE request: also bypasses enforcement.
+    // DELETE request: requires x-agent-id, bypasses enforcement.
     let resp = client
         .delete(format!(
             "http://127.0.0.1:{proxy_port}/v1/critical/resource"
         ))
+        .header("x-agent-id", "test-agent")
         .send()
         .await
         .unwrap();
     assert_eq!(
         resp.status(),
         200,
-        "DELETE request must pass through regardless of policy (by design)"
+        "DELETE with x-agent-id must pass through regardless of policy"
     );
 
     // MCP POST: SHOULD be denied by the deny-all policy.
