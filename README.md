@@ -36,7 +36,7 @@ Arbiter governs what agents are **allowed** to do.
 It does not govern what agents **might try** to do. It protects the platform by
 reducing the tool-call attack surface that agentic applications typically leave open, or
 require. This is valuable. But a clever-enough hacker with sinister-enough intentions
-will be able to deceive a model into breaking it. That's a far deeper problem requiring
+will be able to deceive a model into hacking **any** proxy. That's a far deeper problem requiring
 greater compute than a proxy can performantly handle.
 
 ## Who is Arbiter for?
