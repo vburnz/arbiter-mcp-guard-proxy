@@ -50,6 +50,10 @@ pub struct AuditSink {
     write_failures: AtomicU64,
     /// Total write failures since startup.
     total_write_failures: AtomicU64,
+    /// Consecutive successes since last failure. Used for hysteresis:
+    /// the sink must succeed N times before transitioning from degraded to healthy,
+    /// preventing rapid flapping when the underlying issue is intermittent.
+    recovery_successes: AtomicU64,
 }
 
 impl AuditSink {
@@ -60,6 +64,7 @@ impl AuditSink {
             stats: crate::stats::AuditStats::new(),
             write_failures: AtomicU64::new(0),
             total_write_failures: AtomicU64::new(0),
+            recovery_successes: AtomicU64::new(0),
         }
     }
 
@@ -68,7 +73,13 @@ impl AuditSink {
         &self.stats
     }
 
-    /// Returns true if the audit sink has had recent write failures.
+    /// Consecutive successes required before transitioning from degraded to healthy.
+    /// Prevents flapping when the underlying issue is intermittent (e.g., disk pressure).
+    const RECOVERY_THRESHOLD: u64 = 3;
+
+    /// Returns true if the audit sink is degraded.
+    /// Hysteresis: once degraded, requires RECOVERY_THRESHOLD consecutive
+    /// successful writes before returning to healthy.
     pub fn is_degraded(&self) -> bool {
         self.write_failures.load(Ordering::Relaxed) > 0
     }
@@ -101,11 +112,25 @@ impl AuditSink {
         if let Some(path) = &self.config.file_path {
             match self.write_to_file(path, &json).await {
                 Ok(()) => {
-                    self.write_failures.store(0, Ordering::Relaxed);
+                    let prev_failures = self.write_failures.load(Ordering::Relaxed);
+                    if prev_failures > 0 {
+                        // In recovery: count consecutive successes before clearing degraded state.
+                        let successes = self.recovery_successes.fetch_add(1, Ordering::Relaxed) + 1;
+                        if successes >= Self::RECOVERY_THRESHOLD {
+                            self.write_failures.store(0, Ordering::Relaxed);
+                            self.recovery_successes.store(0, Ordering::Relaxed);
+                            tracing::info!(
+                                threshold = Self::RECOVERY_THRESHOLD,
+                                "audit sink recovered after {} consecutive successful writes",
+                                successes
+                            );
+                        }
+                    }
                 }
                 Err(e) => {
                     let consecutive = self.write_failures.fetch_add(1, Ordering::Relaxed) + 1;
                     self.total_write_failures.fetch_add(1, Ordering::Relaxed);
+                    self.recovery_successes.store(0, Ordering::Relaxed);
                     tracing::error!(
                         error = %e,
                         consecutive_failures = consecutive,
@@ -223,11 +248,19 @@ mod tests {
             file_path: Some(file_path.clone()),
             ..Default::default()
         });
-        // Manually simulate degraded state then recovery.
+        // Manually simulate degraded state then recovery with hysteresis.
         recovered_sink.write_failures.store(3, Ordering::Relaxed);
         assert!(recovered_sink.is_degraded());
 
-        // Successful write resets consecutive counter.
+        // With hysteresis, RECOVERY_THRESHOLD consecutive successes needed.
+        for i in 1..AuditSink::RECOVERY_THRESHOLD {
+            recovered_sink.write(&entry).await.unwrap();
+            assert!(
+                recovered_sink.is_degraded(),
+                "should still be degraded after {i} successful write(s)"
+            );
+        }
+        // The Nth success clears the degraded state.
         recovered_sink.write(&entry).await.unwrap();
         assert!(!recovered_sink.is_degraded());
         assert_eq!(recovered_sink.consecutive_failures(), 0);

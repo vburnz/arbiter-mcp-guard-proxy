@@ -11,7 +11,12 @@ pub struct AgentTokenClaims {
     pub iss: String,
     pub iat: i64,
     pub exp: i64,
-    /// Unique token identifier for revocation tracking.
+    /// Unique token identifier for future revocation tracking.
+    /// NOTE: JTI is generated per-token but not currently checked against a
+    /// blocklist during validation. Token revocation is handled at the session
+    /// and agent level (deactivate agent → cascade invalidation). A JTI
+    /// blocklist would add per-request state lookup; the current design trades
+    /// fine-grained token revocation for stateless validation performance.
     pub jti: String,
 }
 

@@ -517,6 +517,8 @@ async fn forbidden_with_wrong_api_key() {
     let base = spawn_server().await;
     let c = client();
 
+    // Returns 401 (not 403) to avoid differentiating missing vs. invalid key,
+    // which would let an attacker confirm the header name without knowing the value.
     let res = c
         .get(format!("{base}/agents"))
         .header("x-api-key", "wrong-key")
@@ -524,7 +526,7 @@ async fn forbidden_with_wrong_api_key() {
         .await
         .unwrap();
 
-    assert_eq!(res.status(), 403);
+    assert_eq!(res.status(), 401);
 }
 
 #[tokio::test]

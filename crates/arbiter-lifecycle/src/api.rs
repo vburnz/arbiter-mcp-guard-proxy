@@ -187,9 +187,11 @@ fn validate_admin_key(
         })?;
 
     // P0 credential fix: constant-time comparison to prevent timing attacks.
+    // Return 401 (not 403) for invalid keys to avoid differentiating missing vs. wrong key,
+    // which would let an attacker confirm the header name without knowing the value.
     if !constant_time_eq(key.as_bytes(), expected.as_bytes()) {
         return Err((
-            StatusCode::FORBIDDEN,
+            StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
                 error: "invalid API key".into(),
             }),
@@ -745,6 +747,14 @@ pub async fn create_session(
             )
                 .into_response();
         }
+    }
+
+    if req.authorized_tools.is_empty() {
+        tracing::warn!(
+            agent_id = %req.agent_id,
+            "session created with empty authorized_tools; all tools will be permitted. \
+             Specify an explicit tool allowlist for least-privilege enforcement."
+        );
     }
 
     let create_req = CreateSessionRequest {

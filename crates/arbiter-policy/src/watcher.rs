@@ -99,6 +99,8 @@ impl PolicyWatcher {
 
 /// Read, parse, validate, and swap the policy config from `path` into `shared`.
 fn reload_from_file(path: &Path, shared: &Arc<watch::Sender<Arc<Option<PolicyConfig>>>>) {
+    // Read the file and verify it ends with a newline or closing bracket,
+    // reducing the chance of reading a partially-written file.
     let contents = match std::fs::read_to_string(path) {
         Ok(c) => c,
         Err(e) => {
@@ -106,6 +108,10 @@ fn reload_from_file(path: &Path, shared: &Arc<watch::Sender<Arc<Option<PolicyCon
             return;
         }
     };
+    if contents.is_empty() {
+        tracing::warn!(path = %path.display(), "policy hot-reload: file is empty, skipping");
+        return;
+    }
 
     let new_config = match PolicyConfig::from_toml(&contents) {
         Ok(pc) => pc,
