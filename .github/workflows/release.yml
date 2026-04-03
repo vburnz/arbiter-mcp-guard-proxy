@@ -265,6 +265,19 @@ jobs:
         with:
           key: publish
 
+      - name: Sync crate versions to release tag
+        env:
+          RELEASE_TAG: ${{ needs.tag.outputs.tag || github.ref_name }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          CURRENT=$(grep -m1 'version = "' Cargo.toml | sed 's/.*version = "\([^"]*\)".*/\1/')
+          if [ "$VERSION" != "$CURRENT" ]; then
+            echo "Updating crate versions: $CURRENT -> $VERSION"
+            find . -name Cargo.toml -exec sed -i "s/version = \"$CURRENT\"/version = \"$VERSION\"/g" {} +
+          else
+            echo "Versions already at $VERSION"
+          fi
+
       - name: Publish to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -295,17 +308,21 @@ jobs:
             echo "::group::Publishing $crate"
             # Retry up to 3 times with backoff (crates.io index propagation)
             for attempt in 1 2 3; do
-              if cargo publish -p "$crate" --no-verify 2>&1; then
+              OUTPUT=$(cargo publish -p "$crate" --no-verify 2>&1) && {
                 echo "Published $crate"
                 break
-              else
-                if [ $attempt -eq 3 ]; then
-                  echo "::error::Failed to publish $crate after 3 attempts"
-                  exit 1
-                fi
-                echo "Attempt $attempt failed, waiting 30s for index propagation..."
-                sleep 30
+              }
+              echo "$OUTPUT"
+              if echo "$OUTPUT" | grep -q "already exists"; then
+                echo "$crate already published, skipping"
+                break
               fi
+              if [ $attempt -eq 3 ]; then
+                echo "::error::Failed to publish $crate after 3 attempts"
+                exit 1
+              fi
+              echo "Attempt $attempt failed, waiting 30s for index propagation..."
+              sleep 30
             done
             # Wait for crates.io index to update before publishing dependents
             sleep 15
