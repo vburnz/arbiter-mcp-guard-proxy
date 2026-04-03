@@ -320,10 +320,24 @@ jobs:
                 echo "::error::Failed to publish $crate after 5 attempts"
                 exit 1
               fi
-              # Back off longer on rate limits (429)
+              # Back off on rate limits using the server's retry-after time
               if echo "$OUTPUT" | grep -q "429"; then
-                echo "Rate limited, waiting 120s..."
-                sleep 120
+                RETRY_AFTER=$(echo "$OUTPUT" | sed -n 's/.*try again after \(.*\) and see.*/\1/p')
+                if [ -n "$RETRY_AFTER" ]; then
+                  TARGET=$(date -d "$RETRY_AFTER" +%s 2>/dev/null || echo 0)
+                  NOW=$(date +%s)
+                  WAIT=$((TARGET - NOW + 10))
+                  if [ "$WAIT" -gt 0 ] && [ "$WAIT" -lt 600 ]; then
+                    echo "Rate limited, sleeping ${WAIT}s until $RETRY_AFTER"
+                    sleep "$WAIT"
+                  else
+                    echo "Rate limited, waiting 180s..."
+                    sleep 180
+                  fi
+                else
+                  echo "Rate limited, waiting 180s..."
+                  sleep 180
+                fi
               else
                 echo "Attempt $attempt failed, waiting 30s..."
                 sleep 30
