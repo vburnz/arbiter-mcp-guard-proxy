@@ -24,3 +24,10 @@ listen_port = 3000
 api_key = "demo-key"
 signing_secret = "demo-secret"
 token_expiry_secs = 3600
+
+# Permissive policy: allow all file operations so the session whitelist
+# (Stage 7) is the enforcement layer tested by this demo.
+[[policy.policies]]
+id = "allow-all-file-ops"
+effect = "allow"
+allowed_tools = ["read_file", "list_dir", "delete_file"]

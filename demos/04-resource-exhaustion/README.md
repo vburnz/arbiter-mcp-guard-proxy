@@ -6,6 +6,6 @@ AI agents can enter runaway loops, be manipulated by prompt injection to make ex
 
 The demo creates two sessions to show both protection mechanisms. Part A creates a session with a rate limit of 3 calls per minute. The first three calls succeed, but the fourth is rejected with a 429 and error code `SESSION_INVALID`. Part B creates a session with a total call budget of 5. Calls 1 through 5 succeed, but the sixth is rejected with a 429.
 
-Both limits are configured at session creation time and enforced at Stage 7 of Arbiter's middleware pipeline. The session store tracks call counts and sliding-window rate data, making enforcement O(1) per request with no external dependencies.
+Both limits are configured at session creation time and enforced at Stage 7 of Arbiter's middleware pipeline. The session store tracks call counts and fixed-window rate counters, making per-request enforcement O(1) with no external dependencies.
 
 To run: `bash demo.sh`

@@ -41,8 +41,8 @@ Each script will:
 | 06 | Zero-Trust Policy | No matching Allow policy (deny-by-default) | 403 POLICY_DENIED |
 | 07 | Parameter Tampering | Exceed parameter constraints on a tool | 403 POLICY_DENIED |
 | 08 | Intent Drift | Write operation in a read-only session | 403 BEHAVIORAL_ANOMALY |
-| 09 | Session Multiplication | Open sessions beyond per-agent cap | 429 TOO_MANY_SESSIONS |
-| 10 | Credential Leakage | Upstream echoes injected credentials | 200 (scrubbed) |
+| 09 | Session Multiplication | Open sessions beyond per-agent cap | 429 (session cap) |
+| 10 | Response Exfiltration | Upstream returns sensitive data above session ceiling | 502 (blocked) |
 
 ## Color coding
 

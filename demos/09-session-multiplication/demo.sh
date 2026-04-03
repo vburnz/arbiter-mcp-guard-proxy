@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ── Demo 09: Session Multiplication ──────────────────────────────────
 # Attack: Open many concurrent sessions to bypass per-session rate limits.
-# Expected: First 10 sessions succeed, 11th returns 429 TooManySessions
+# Expected: First 10 sessions succeed, 11th returns 429
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="${SCRIPT_DIR}/../.."
@@ -99,7 +99,7 @@ for i in $(seq 1 15); do
     SESSION_ID=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['session_id'])" 2>/dev/null || echo "unknown")
     printf "  Session %2d: ${GREEN}%s OK${NC} (budget: 1000)\n" "$i" "$HTTP"
   elif [ "$HTTP" = "429" ]; then
-    printf "  Session %2d: ${RED}429 TooManySessions${NC}\n" "$i"
+    printf "  Session %2d: ${RED}429 (too many concurrent sessions)${NC}\n" "$i"
     if [ "$i" = "11" ]; then
       echo ""
       echo "  Response:"
@@ -119,6 +119,6 @@ echo "  calls -- effectively bypassing per-session rate limits."
 echo ""
 echo "  max_concurrent_sessions_per_agent (default: 10) caps the number of"
 echo "  active sessions per agent. Once the cap is reached, new session"
-echo "  creation returns 429 TooManySessions. The agent's total effective"
+echo "  creation returns 429. The agent's total effective"
 echo "  budget is bounded to cap x per-session budget."
 echo ""

@@ -6,6 +6,6 @@ Session replay is a common attack pattern: an attacker intercepts or obtains a v
 
 The demo creates a session with a 3-second TTL. An immediate tool call succeeds, but after waiting 4 seconds, the same session ID returns a 408 with error code `SESSION_INVALID` and a detail message explaining the session has expired. The demo also shows that sessions explicitly closed via the admin API return a 410 Gone.
 
-Arbiter's session store checks expiry on every request, and a background cleanup task removes expired sessions periodically. This means even if an attacker knows a valid session UUID, it becomes useless after the TTL passes.
+Arbiter's session store checks expiry on every request at use time. A separate background cleanup task periodically removes expired sessions from memory, but expiry enforcement does not depend on it. This means even if an attacker knows a valid session UUID, it becomes useless after the TTL passes.
 
 To run: `bash demo.sh`

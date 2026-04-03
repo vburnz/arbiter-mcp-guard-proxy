@@ -4,9 +4,9 @@ This demo shows how Arbiter's per-agent session cap prevents session multiplicat
 
 A compromised or malicious agent can attempt to bypass per-session rate limits by opening many concurrent sessions. Each session has its own call budget (e.g., 1000 calls), so an agent that opens 100 sessions effectively grants itself a 100,000-call budget. Without a cap, per-session limits provide no meaningful aggregate protection.
 
-The `max_concurrent_sessions_per_agent` setting (default: 10) closes this gap. Once an agent reaches the cap, further session creation requests are rejected with HTTP 429 and error code `TooManySessions`. Existing sessions are unaffected.
+The `max_concurrent_sessions_per_agent` setting (default: 10) closes this gap. Once an agent reaches the cap, further session creation requests are rejected with HTTP 429. Existing sessions are unaffected.
 
-The demo registers a single agent and attempts to create 15 sessions. The first 10 succeed. Sessions 11 through 15 are rejected. Each rejected request returns a 429 with a JSON body containing the `TooManySessions` error code and a message explaining the cap.
+The demo registers a single agent and attempts to create 15 sessions. The first 10 succeed. Sessions 11 through 15 are rejected with HTTP 429 and a JSON body explaining the cap.
 
 ## Attack scenario
 
@@ -27,10 +27,10 @@ Session  1: 200 OK (session created)
 Session  2: 200 OK (session created)
 ...
 Session 10: 200 OK (session created)
-Session 11: 429 TooManySessions
-Session 12: 429 TooManySessions
+Session 11: 429 (too many concurrent sessions)
+Session 12: 429 (too many concurrent sessions)
 ...
-Session 15: 429 TooManySessions
+Session 15: 429 (too many concurrent sessions)
 ```
 
 To run: `bash demo.sh`

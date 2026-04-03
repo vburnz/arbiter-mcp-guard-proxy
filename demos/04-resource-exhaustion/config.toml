@@ -25,3 +25,10 @@ listen_port = 3000
 api_key = "demo-key"
 signing_secret = "demo-secret"
 token_expiry_secs = 3600
+
+# Permissive policy: allow read_file so the session rate limit and
+# call budget (Stage 7) are the enforcement layers tested by this demo.
+[[policy.policies]]
+id = "allow-read"
+effect = "allow"
+allowed_tools = ["read_file"]

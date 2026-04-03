@@ -44,9 +44,9 @@ echo -e "${BOLD}═════════════════════�
 echo -e "${BOLD}  DEMO 10: Response Exfiltration${NC}"
 echo -e "${BOLD}════════════════════════════════════════════════════════════${NC}"
 echo ""
-echo "  Attack: Upstream MCP server returns leaked credentials/PII"
-echo "  Config: response_inspection.enabled = true"
-echo "  Expected: Clean responses pass; tainted responses blocked"
+echo "  Attack: Upstream MCP server returns sensitive data (API keys, PII)"
+echo "  Config: default data_sensitivity_ceiling = internal"
+echo "  Expected: Clean responses pass; restricted data blocked with 502"
 echo ""
 
 # ── Start mock upstream that returns tainted responses ──────────────
@@ -198,12 +198,12 @@ RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "$PROXY" \
 HTTP=$(echo "$RESP" | grep "HTTP_STATUS:" | cut -d: -f2)
 BODY=$(echo "$RESP" | sed '/HTTP_STATUS:/d')
 
-if [ "$HTTP" = "403" ]; then
-  echo -e "  Status: ${RED}403 RESPONSE_BLOCKED${NC}"
+if [ "$HTTP" = "502" ]; then
+  echo -e "  Status: ${RED}502 BLOCKED${NC} (response contained restricted data)"
   echo "  Response:"
   echo "$BODY" | python3 -m json.tool 2>/dev/null || echo "$BODY"
-elif [ "$HTTP" = "200" ] || [ "$HTTP" = "502" ]; then
-  echo -e "  Status: ${YELLOW}${HTTP}${NC} (response was NOT blocked -- inspection may not be active)"
+elif [ "$HTTP" = "200" ]; then
+  echo -e "  Status: ${YELLOW}200${NC} (response was NOT blocked -- data may be within ceiling)"
 else
   echo -e "  Status: ${YELLOW}${HTTP}${NC}"
 fi
@@ -211,13 +211,12 @@ fi
 echo ""
 echo -e "${BOLD}── Explanation ──${NC}"
 echo ""
-echo "  Without response inspection, the proxy forwards upstream responses"
-echo "  verbatim. A compromised or misconfigured upstream server could leak"
-echo "  API keys, credentials, or PII back through the proxy to the agent."
+echo "  Arbiter's response classifier scans upstream responses for sensitive"
+echo "  data patterns (AWS keys, API keys, SSNs, credit card numbers,"
+echo "  private keys, internal IPs). Each finding is classified by severity:"
+echo "  Internal, Confidential, or Restricted."
 echo ""
-echo "  Response body inspection scans upstream responses for configurable"
-echo "  patterns (API keys, AWS credentials, SSNs, credit card numbers)"
-echo "  before returning them to the agent. When sensitive content is"
-echo "  detected, the response is blocked and replaced with a sanitized"
-echo "  error. The agent never sees the leaked data."
+echo "  Sessions have a data_sensitivity_ceiling (default: Internal). When"
+echo "  Restricted data is found in a non-Restricted session, the response"
+echo "  is blocked with 502 and the agent never sees the leaked data."
 echo ""

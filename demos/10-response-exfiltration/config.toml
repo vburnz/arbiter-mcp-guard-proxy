@@ -1,6 +1,7 @@
-# Demo 10: Credential Leakage via Response
-# Attack: Upstream MCP server echoes injected credentials back in response.
-# Defense: Credential scrubbing replaces leaked values with [CREDENTIAL].
+# Demo 10: Response Exfiltration
+# Attack: Upstream MCP server returns sensitive data (API keys, PII).
+# Defense: Response data classification blocks responses exceeding the
+#          session's data_sensitivity_ceiling.
 
 [proxy]
 listen_addr = "127.0.0.1"
@@ -12,10 +13,6 @@ strict_mcp = true
 [sessions]
 default_time_limit_secs = 3600
 default_call_budget = 100
-
-[credentials]
-provider = "file"
-file_path = "credentials.toml"
 
 [audit]
 enabled = true
@@ -29,3 +26,10 @@ listen_port = 3000
 api_key = "demo-key"
 signing_secret = "demo-secret"
 token_expiry_secs = 3600
+
+# Allow query_records so the response classification layer is the
+# enforcement mechanism tested by this demo.
+[[policy.policies]]
+id = "allow-query"
+effect = "allow"
+allowed_tools = ["query_records"]
