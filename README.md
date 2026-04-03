@@ -8,10 +8,6 @@ A lightweight proxy that sits between AI agents and MCP (Model Context Protocol)
 deny-by-default authorization, session budgets, drift detection, and
 structured auditing on every tool call.
 
-Arbiter governs what agents are allowed to do.
-It does not govern what agents try to do. It protects the platform by
-reducing the tool-call attack surface.
-
 ## Why?
 
 AI agents act autonomously at machine speed. A single misconfigured agent
@@ -33,6 +29,15 @@ Arbiter sits in the request path and enforces:
 See [Why MCP Tool Calls Need a Firewall](docs/sphinx/understanding/why-agent-iam.md) for the full argument, or
 the [QuantumBank case study](https://cyrenei.github.io/arbiter-mcp-firewall/case-study.html) for a worked example
 showing 2 allowed and 4 blocked tool categories.
+
+## Limitations
+
+Arbiter governs what agents are **allowed** to do.
+It does not govern what agents **might try** to do. It protects the platform by
+reducing the tool-call attack surface that agentic applications typically leave open, or 
+require. This is valuable. But a clever enough hacker with sinister-enough intentions
+will be able to deceives a model into breaking it. That's a far deeper problem requiring 
+greater compute than a proxy can performantly handle.
 
 ## Who is Arbiter for?
 
