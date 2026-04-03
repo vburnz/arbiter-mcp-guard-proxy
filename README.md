@@ -1,10 +1,10 @@
-# Arbiter: Firewall for MCP
+# Arbiter: A Firewall for MCP
 
 [![CI](https://github.com/cyrenei/arbiter-mcp-firewall/actions/workflows/ci.yml/badge.svg)](https://github.com/cyrenei/arbiter-mcp-firewall/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Donate](https://img.shields.io/badge/Sponsor-♡-ff69b4)](https://github.com/sponsors/cyrenei)
 
-A lightweight Rust binary that sits between AI agents and MCP (Model Context Protocol) servers, enforcing
+A lightweight Rust binary containing a proxy that sits between AI agents and MCP (Model Context Protocol) servers, enforcing
 deny-by-default authorization, session budgets, drift detection, and
 structured auditing on every tool call.
 
