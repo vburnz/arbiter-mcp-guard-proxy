@@ -50,6 +50,23 @@ centralized NHI management across hundreds of service identities, look at
 [Aembit](https://aembit.io). If you need a managed platform, this isn't
 it. Arbiter is open-source infrastructure you operate yourself.
 
+## Arbiter + codejail
+
+Arbiter gates tool calls at the network layer. [codejail](https://github.com/cyrenei/code-jail) gates tool *execution* at the process layer. Same policy language, same governance crates, different enforcement point.
+
+Use Arbiter alone when your MCP tools run on trusted infrastructure and you just need to control which calls reach them. Add codejail when the tool implementation itself is untrusted — AI-generated code, third-party WASM modules, anything you wouldn't run unsandboxed.
+
+### Trust model
+
+| Actor | Trust level | Rationale |
+|-------|------------|-----------|
+| **Operator** | Trusted | Configures Arbiter, writes policy files, manages agent registration |
+| **Policy file** | Authoritative | Defines what tools are allowed; not validated for correctness |
+| **AI agent** | Untrusted | Tool calls are intercepted, evaluated, and audit-logged before forwarding |
+| **Declared intent** | Advisory | Used for drift detection, not enforcement; an adversarial agent would lie |
+
+Arbiter is designed for scenarios where the platform operator is trusted but the AI agents are not — the operator writes policy, the agents operate within it.
+
 ## Disclaimer
 
 **This software is provided AS IS, with no warranty and no support.** Use it
