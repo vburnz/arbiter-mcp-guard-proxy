@@ -306,8 +306,7 @@ jobs:
 
           for crate in "${CRATES[@]}"; do
             echo "::group::Publishing $crate"
-            # Retry up to 3 times with backoff (crates.io index propagation)
-            for attempt in 1 2 3; do
+            for attempt in 1 2 3 4 5; do
               OUTPUT=$(cargo publish -p "$crate" --no-verify --allow-dirty 2>&1) && {
                 echo "Published $crate"
                 break
@@ -317,14 +316,19 @@ jobs:
                 echo "$crate already published, skipping"
                 break
               fi
-              if [ $attempt -eq 3 ]; then
-                echo "::error::Failed to publish $crate after 3 attempts"
+              if [ $attempt -eq 5 ]; then
+                echo "::error::Failed to publish $crate after 5 attempts"
                 exit 1
               fi
-              echo "Attempt $attempt failed, waiting 30s for index propagation..."
-              sleep 30
+              # Back off longer on rate limits (429)
+              if echo "$OUTPUT" | grep -q "429"; then
+                echo "Rate limited, waiting 120s..."
+                sleep 120
+              else
+                echo "Attempt $attempt failed, waiting 30s..."
+                sleep 30
+              fi
             done
-            # Wait for crates.io index to update before publishing dependents
-            sleep 15
+            sleep 20
             echo "::endgroup::"
           done
