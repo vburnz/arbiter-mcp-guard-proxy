@@ -286,17 +286,17 @@ jobs:
             echo "::warning::CARGO_REGISTRY_TOKEN not set, skipping publish"
             exit 0
           fi
-          # Topological publish order (leaves first)
+          # Topological publish order (leaves first, dev-deps included)
           CRATES=(
             arbiter-mcp
             arbiter-storage
             arbiter-metrics
             arbiter-audit
-            arbiter-credential
+            arbiter-session
             arbiter-identity
             arbiter-behavior
-            arbiter-session
             arbiter-proxy
+            arbiter-credential
             arbiter-policy
             arbiter-oauth
             arbiter-lifecycle
