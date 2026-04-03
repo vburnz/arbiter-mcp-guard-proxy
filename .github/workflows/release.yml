@@ -308,7 +308,7 @@ jobs:
             echo "::group::Publishing $crate"
             # Retry up to 3 times with backoff (crates.io index propagation)
             for attempt in 1 2 3; do
-              OUTPUT=$(cargo publish -p "$crate" --no-verify 2>&1) && {
+              OUTPUT=$(cargo publish -p "$crate" --no-verify --allow-dirty 2>&1) && {
                 echo "Published $crate"
                 break
               }
