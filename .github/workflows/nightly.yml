@@ -43,7 +43,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run security demo scenarios
-        run: cargo test -p arbiter --test security_scenarios -- --ignored
+        run: cargo test -p arbiter-mcp-firewall --test security_scenarios -- --ignored
 
   load-test:
     runs-on: ubuntu-latest
@@ -55,7 +55,7 @@ jobs:
         env:
           LOAD_TEST_CONNECTIONS: 100
           LOAD_TEST_REQUESTS_PER_CONN: 50
-        run: cargo test -p arbiter --test load_test -- --ignored --nocapture 2>&1 | tee load-test-results.txt
+        run: cargo test -p arbiter-mcp-firewall --test load_test -- --ignored --nocapture 2>&1 | tee load-test-results.txt
       - name: Upload load test results
         uses: actions/upload-artifact@v4
         with:
