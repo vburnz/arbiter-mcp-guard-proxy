@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
+use http_body_util::{BodyExt, Full, Limited};
 use hyper::body::Incoming;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::client::legacy::Client;
@@ -31,6 +31,10 @@ pub struct ProxyState {
     pub redaction_config: RedactionConfig,
     /// Prometheus metrics.
     pub metrics: Arc<ArbiterMetrics>,
+    /// Maximum body size in bytes (request and response).
+    pub max_body_bytes: usize,
+    /// Upstream request timeout.
+    pub upstream_timeout: std::time::Duration,
 }
 
 impl ProxyState {
@@ -41,6 +45,8 @@ impl ProxyState {
         audit_sink: Option<Arc<AuditSink>>,
         redaction_config: RedactionConfig,
         metrics: Arc<ArbiterMetrics>,
+        max_body_bytes: usize,
+        upstream_timeout: std::time::Duration,
     ) -> Self {
         let client = Client::builder(TokioExecutor::new()).build_http();
         Self {
@@ -50,6 +56,8 @@ impl ProxyState {
             audit_sink,
             redaction_config,
             metrics,
+            max_body_bytes,
+            upstream_timeout,
         }
     }
 }
@@ -163,16 +171,88 @@ pub async fn handle_request(
     // Remove the Host header so hyper sets the correct one.
     upstream_req.headers_mut().remove(hyper::header::HOST);
 
-    // Forward to upstream and time it.
+    // Strip security-sensitive headers that clients could use to spoof identity
+    // or inject forged routing/delegation information. The proxy is the
+    // authoritative source for these headers; upstream must not trust client values.
+    for header_name in &[
+        "x-agent-id",
+        "x-session-id",
+        "x-delegation-chain",
+        "x-forwarded-for",
+        "x-real-ip",
+        "x-arbiter-session",
+    ] {
+        if let Ok(name) = hyper::header::HeaderName::from_bytes(header_name.as_bytes()) {
+            upstream_req.headers_mut().remove(&name);
+        }
+    }
+
+    // Forward to upstream and time it, with timeout.
     let upstream_start = Instant::now();
 
-    match state.client.request(upstream_req).await {
-        Ok(resp) => {
+    let upstream_future = state.client.request(upstream_req);
+    let upstream_result = tokio::time::timeout(state.upstream_timeout, upstream_future).await;
+
+    match upstream_result {
+        Err(_elapsed) => {
+            tracing::error!(timeout = ?state.upstream_timeout, "upstream request timed out");
+            state.metrics.observe_upstream_duration(upstream_start.elapsed().as_secs_f64());
+            state.metrics.record_request("allow");
+            state.metrics.observe_request_duration(request_start.elapsed().as_secs_f64());
+
+            let entry = capture.finalize(Some(504));
+            if let Some(sink) = &state.audit_sink
+                && let Err(e) = sink.write(&entry).await
+            {
+                tracing::error!(error = %e, "failed to write audit entry");
+            }
+
+            return Ok(Response::builder()
+                .status(StatusCode::GATEWAY_TIMEOUT)
+                .body(Full::new(Bytes::from("Gateway Timeout")))
+                .expect("building static response cannot fail"));
+        }
+        Ok(Err(e)) => {
+            state.metrics.observe_upstream_duration(upstream_start.elapsed().as_secs_f64());
+            tracing::error!(error = %e, "upstream request failed");
+            state.metrics.record_request("allow");
+            state.metrics.observe_request_duration(request_start.elapsed().as_secs_f64());
+
+            let entry = capture.finalize(None);
+            if let Some(sink) = &state.audit_sink
+                && let Err(e) = sink.write(&entry).await
+            {
+                tracing::error!(error = %e, "failed to write audit entry");
+            }
+
+            return Ok(Response::builder()
+                .status(StatusCode::BAD_GATEWAY)
+                .body(Full::new(Bytes::from("Bad Gateway")))
+                .expect("building static response cannot fail"));
+        }
+        Ok(Ok(resp)) => {
             state
                 .metrics
                 .observe_upstream_duration(upstream_start.elapsed().as_secs_f64());
             let (parts, body) = resp.into_parts();
-            let body_bytes = body.collect().await?.to_bytes();
+            // Apply body size limit to prevent memory exhaustion.
+            let limited_body = Limited::new(body, state.max_body_bytes);
+            let body_bytes = match limited_body.collect().await {
+                Ok(collected) => collected.to_bytes(),
+                Err(_) => {
+                    tracing::error!(max = state.max_body_bytes, "upstream response body exceeded size limit");
+                    let entry = capture.finalize(Some(502));
+                    if let Some(sink) = &state.audit_sink
+                        && let Err(e) = sink.write(&entry).await
+                    {
+                        tracing::error!(error = %e, "failed to write audit entry");
+                    }
+                    return Ok(Response::builder()
+                        .status(StatusCode::BAD_GATEWAY)
+                        .body(Full::new(Bytes::from("Response body too large")))
+                        .expect("building static response cannot fail"));
+                }
+            };
             let status = parts.status.as_u16();
             state.metrics.record_request("allow");
             state
@@ -187,28 +267,6 @@ pub async fn handle_request(
             }
 
             Ok(Response::from_parts(parts, Full::new(body_bytes)))
-        }
-        Err(e) => {
-            state
-                .metrics
-                .observe_upstream_duration(upstream_start.elapsed().as_secs_f64());
-            tracing::error!(error = %e, "upstream request failed");
-            state.metrics.record_request("allow");
-            state
-                .metrics
-                .observe_request_duration(request_start.elapsed().as_secs_f64());
-
-            let entry = capture.finalize(None);
-            if let Some(sink) = &state.audit_sink
-                && let Err(e) = sink.write(&entry).await
-            {
-                tracing::error!(error = %e, "failed to write audit entry");
-            }
-
-            Ok(Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .body(Full::new(Bytes::from("Bad Gateway")))
-                .expect("building static response cannot fail"))
         }
     }
 }
@@ -230,6 +288,7 @@ pub fn build_audit(config: &AuditConfig) -> (Option<Arc<AuditSink>>, RedactionCo
     let sink_config = arbiter_audit::AuditSinkConfig {
         write_stdout: true,
         file_path: config.file_path.as_ref().map(std::path::PathBuf::from),
+        ..Default::default()
     };
     let sink = Arc::new(AuditSink::new(sink_config));
 

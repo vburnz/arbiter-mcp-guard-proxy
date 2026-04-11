@@ -157,7 +157,9 @@ pub struct AnomalyConfig {
 impl Default for AnomalyConfig {
     fn default() -> Self {
         Self {
-            escalate_to_deny: false,
+            // Default to deny: the less-secure default (false/flag-only) must
+            // require explicit operator opt-in, not the other way around.
+            escalate_to_deny: true,
             read_intent_keywords: default_read_intent_keywords(),
             write_intent_keywords: default_write_intent_keywords(),
             admin_intent_keywords: default_admin_intent_keywords(),
@@ -273,14 +275,20 @@ impl AnomalyDetector {
         };
 
         if !is_anomalous {
-            // Argument scanning for destructive patterns applies to Read and
-            // Unknown tiers. Unknown-tier sessions should receive at least
-            // read-level scrutiny for destructive argument patterns.
-            if matches!(tier, IntentTier::Read | IntentTier::Unknown)
-                && let Some(args) = arguments
-            {
+            // Argument scanning for destructive patterns applies to ALL tiers.
+            // Previously limited to Read/Unknown, allowing Write and Admin
+            // sessions to pass arbitrary destructive content (rm -rf, drop
+            // database, SQL injection) without any argument inspection.
+            if let Some(args) = arguments {
                 // Pattern-based scan against configurable suspicious patterns.
-                let text = args.to_string().to_lowercase();
+                // Strip non-printing characters and zero-width Unicode before matching
+                // to resist evasion via \u200B (zero-width space), \u00AD (soft hyphen),
+                // or JSON unicode escapes that survive to_lowercase().
+                let raw = args.to_string().to_lowercase();
+                let text: String = raw
+                    .chars()
+                    .filter(|c| !c.is_control() && *c != '\u{200B}' && *c != '\u{200C}' && *c != '\u{200D}' && *c != '\u{FEFF}' && *c != '\u{00AD}')
+                    .collect();
                 for pattern in &self.config.suspicious_arg_patterns {
                     if text.contains(pattern.as_str()) {
                         let reason = format!(
@@ -752,6 +760,7 @@ mod tests {
     #[test]
     fn configurable_patterns_trigger_detection() {
         let detector = AnomalyDetector::new(AnomalyConfig {
+            escalate_to_deny: false,
             suspicious_arg_patterns: vec!["super_secret_payload".into()],
             ..Default::default()
         });
@@ -773,7 +782,7 @@ mod tests {
     /// Nested array in a read session should be flagged.
     #[test]
     fn nested_array_in_read_session_flagged() {
-        let detector = AnomalyDetector::new(AnomalyConfig::default());
+        let detector = AnomalyDetector::new(AnomalyConfig { escalate_to_deny: false, ..Default::default() });
         let args = serde_json::json!({"files": ["a", "b"]});
         let result = detector.detect_with_args(
             "read the config",
@@ -790,7 +799,7 @@ mod tests {
     /// Suspicious key name in a read session should be flagged.
     #[test]
     fn suspicious_key_in_read_session_flagged() {
-        let detector = AnomalyDetector::new(AnomalyConfig::default());
+        let detector = AnomalyDetector::new(AnomalyConfig { escalate_to_deny: false, ..Default::default() });
         let args = serde_json::json!({"shell_command": "ls"});
         let result = detector.detect_with_args(
             "read the config",
@@ -807,7 +816,7 @@ mod tests {
     /// String value > 1KB in a read session should be flagged.
     #[test]
     fn long_value_in_read_session_flagged() {
-        let detector = AnomalyDetector::new(AnomalyConfig::default());
+        let detector = AnomalyDetector::new(AnomalyConfig { escalate_to_deny: false, ..Default::default() });
         let long_string = "A".repeat(1025);
         let args = serde_json::json!({"payload": long_string});
         let result = detector.detect_with_args(
@@ -824,8 +833,11 @@ mod tests {
 
     /// Structural checks should NOT fire for admin-intent sessions.
     #[test]
-    fn structural_checks_skip_admin_sessions() {
-        let detector = AnomalyDetector::new(AnomalyConfig::default());
+    fn structural_checks_apply_to_admin_sessions() {
+        let detector = AnomalyDetector::new(AnomalyConfig {
+            escalate_to_deny: false,
+            ..Default::default()
+        });
         let args = serde_json::json!({"files": ["a", "b"], "shell_command": "ls"});
         let result = detector.detect_with_args(
             "manage the servers",
@@ -833,17 +845,20 @@ mod tests {
             "read_file",
             Some(&args),
         );
-        assert_eq!(
-            result,
-            AnomalyResponse::Normal,
-            "admin session should not trigger structural checks"
+        // Argument scanning now applies to all tiers including admin.
+        assert!(
+            matches!(result, AnomalyResponse::Flagged { .. }),
+            "admin session should now trigger structural checks, got {result:?}"
         );
     }
 
     /// Structural checks should NOT fire for write-intent sessions.
     #[test]
-    fn structural_checks_skip_write_sessions() {
-        let detector = AnomalyDetector::new(AnomalyConfig::default());
+    fn structural_checks_apply_to_write_sessions() {
+        let detector = AnomalyDetector::new(AnomalyConfig {
+            escalate_to_deny: false,
+            ..Default::default()
+        });
         let args = serde_json::json!({"files": ["a", "b"], "shell_command": "ls"});
         let result = detector.detect_with_args(
             "create the documents",
@@ -851,10 +866,10 @@ mod tests {
             "read_file",
             Some(&args),
         );
-        assert_eq!(
-            result,
-            AnomalyResponse::Normal,
-            "write session should not trigger structural checks"
+        // Argument scanning now applies to write sessions too.
+        assert!(
+            matches!(result, AnomalyResponse::Flagged { .. }),
+            "write session should now trigger structural checks, got {result:?}"
         );
     }
 

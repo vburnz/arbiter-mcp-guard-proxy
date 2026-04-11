@@ -2,25 +2,44 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use secrecy::SecretString;
 use serde::Deserialize;
+use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use crate::error::CredentialError;
 use crate::provider::{CredentialProvider, CredentialRef};
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct CredentialFile {
     credentials: HashMap<String, String>,
 }
 
-#[derive(Debug)]
+// Manual Debug that does not expose credential values.
+impl std::fmt::Debug for CredentialFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CredentialFile")
+            .field("credentials", &format!("{} entries", self.credentials.len()))
+            .finish()
+    }
+}
+
 pub struct FileProvider {
-    credentials: HashMap<String, String>,
-    #[allow(dead_code)]
+    credentials: Arc<RwLock<HashMap<String, SecretString>>>,
     source_path: PathBuf,
+}
+
+// Manual Debug that does not expose credential values.
+impl std::fmt::Debug for FileProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileProvider")
+            .field("credentials", &"<locked>")
+            .field("source_path", &self.source_path)
+            .finish()
+    }
 }
 
 impl FileProvider {
@@ -30,9 +49,19 @@ impl FileProvider {
 
         if path.extension().is_some_and(|ext| ext == "age") {
             return Err(CredentialError::ProviderError(
-                "encrypted .age files are not supported".into(),
+                "encrypted .age files are not yet supported; \
+                 age decryption support is planned (GAP-CRED-1)"
+                    .into(),
             ));
         }
+
+        // Emit a security warning for plaintext credential files.
+        warn!(
+            path = %path.display(),
+            "loading PLAINTEXT credential file. Credentials are stored \
+             unencrypted on disk. Use encrypted .age files (when supported) \
+             or set ARBITER_STORAGE_ENCRYPTION_KEY for at-rest protection."
+        );
 
         let contents = tokio::fs::read_to_string(&path).await.map_err(|e| {
             CredentialError::ProviderError(format!("reading {}: {e}", path.display()))
@@ -45,19 +74,58 @@ impl FileProvider {
         let count = parsed.credentials.len();
         debug!(count, "loaded credentials from file");
 
+        // Convert plaintext strings to SecretString at load time so they are
+        // zeroized on drop. The original HashMap<String, String> is dropped here.
+        let credentials: HashMap<String, SecretString> = parsed
+            .credentials
+            .into_iter()
+            .map(|(k, v)| (k, SecretString::from(v)))
+            .collect();
+
         Ok(Self {
-            credentials: parsed.credentials,
+            credentials: Arc::new(RwLock::new(credentials)),
             source_path: path,
         })
+    }
+
+    /// Reload credentials from the source file without restarting.
+    /// The credential map is swapped atomically under a write lock.
+    pub async fn reload(&self) -> Result<usize, CredentialError> {
+        let contents = tokio::fs::read_to_string(&self.source_path)
+            .await
+            .map_err(|e| {
+                CredentialError::ProviderError(format!(
+                    "reading {}: {e}",
+                    self.source_path.display()
+                ))
+            })?;
+        let parsed: CredentialFile = toml::from_str(&contents).map_err(|e| {
+            CredentialError::ProviderError(format!(
+                "parsing {}: {e}",
+                self.source_path.display()
+            ))
+        })?;
+        let new_creds: HashMap<String, SecretString> = parsed
+            .credentials
+            .into_iter()
+            .map(|(k, v)| (k, SecretString::from(v)))
+            .collect();
+        let count = new_creds.len();
+        let mut creds = self.credentials.write().await;
+        *creds = new_creds;
+        info!(count, path = %self.source_path.display(), "reloaded credentials from file");
+        Ok(count)
     }
 }
 
 #[async_trait]
 impl CredentialProvider for FileProvider {
     async fn resolve(&self, reference: &str) -> Result<SecretString, CredentialError> {
-        self.credentials
+        use secrecy::ExposeSecret;
+        let creds = self.credentials.read().await;
+        creds
             .get(reference)
-            .map(|v| SecretString::from(v.clone()))
+            .map(|v| SecretString::from(v.expose_secret().to_string()))
             .ok_or_else(|| {
                 warn!(reference, "credential not found in file provider");
                 CredentialError::NotFound(reference.to_string())
@@ -65,8 +133,8 @@ impl CredentialProvider for FileProvider {
     }
 
     async fn list_refs(&self) -> Result<Vec<CredentialRef>, CredentialError> {
-        Ok(self
-            .credentials
+        let creds = self.credentials.read().await;
+        Ok(creds
             .keys()
             .map(|name| CredentialRef {
                 name: name.clone(),

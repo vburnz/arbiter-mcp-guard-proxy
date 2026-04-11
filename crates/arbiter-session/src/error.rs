@@ -40,6 +40,22 @@ pub enum SessionError {
         limit_per_minute: u64,
     },
 
+    /// The presenting agent does not match the session's bound agent.
+    #[error("agent mismatch")]
+    AgentMismatch {
+        session_id: Uuid,
+        expected: Uuid,
+        actual: Uuid,
+    },
+
+    /// Storage write-through failed after updating cache.
+    /// The session state in the cache is ahead of durable storage.
+    #[error("storage write-through failed")]
+    StorageWriteThrough {
+        session_id: Uuid,
+        detail: String,
+    },
+
     /// The agent has reached the maximum number of concurrent active sessions.
     ///
     /// P0: Per-agent session cap to prevent session multiplication attacks.

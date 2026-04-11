@@ -34,6 +34,14 @@ pub enum IdentityError {
     #[error("circular delegation detected: {from} -> {to} would create a cycle")]
     CircularDelegation { from: Uuid, to: Uuid },
 
+    #[error("cross-owner delegation denied: {from} (owner: {from_owner}) -> {to} (owner: {to_owner})")]
+    CrossOwnerDelegation {
+        from: Uuid,
+        to: Uuid,
+        from_owner: String,
+        to_owner: String,
+    },
+
     #[error("internal storage error: {0}")]
     InternalError(String),
 }

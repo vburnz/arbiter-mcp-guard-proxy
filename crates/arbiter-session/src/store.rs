@@ -19,6 +19,10 @@ pub struct CreateSessionRequest {
     pub declared_intent: String,
     /// Tools authorized by policy evaluation.
     pub authorized_tools: Vec<String>,
+    /// Credential references this session may resolve.
+    /// Empty means no credentials (deny-by-default for credential injection).
+    #[allow(dead_code)]
+    pub authorized_credentials: Vec<String>,
     /// Session time limit.
     pub time_limit: chrono::Duration,
     /// Maximum number of tool calls.
@@ -47,13 +51,24 @@ impl SessionStore {
 
     /// Create a new task session and return it.
     pub async fn create(&self, req: CreateSessionRequest) -> TaskSession {
+        // Enforce minimum time limit to prevent zero-duration sessions.
+        let time_limit = if req.time_limit < chrono::Duration::seconds(1) {
+            tracing::warn!(
+                requested = ?req.time_limit,
+                "session time_limit below minimum, clamping to 1 second"
+            );
+            chrono::Duration::seconds(1)
+        } else {
+            req.time_limit
+        };
         let session = TaskSession {
             session_id: Uuid::new_v4(),
             agent_id: req.agent_id,
             delegation_chain_snapshot: req.delegation_chain_snapshot,
             declared_intent: req.declared_intent,
             authorized_tools: req.authorized_tools,
-            time_limit: req.time_limit,
+            authorized_credentials: req.authorized_credentials,
+            time_limit,
             call_budget: req.call_budget,
             calls_made: 0,
             rate_limit_per_minute: req.rate_limit_per_minute,
@@ -78,6 +93,52 @@ impl SessionStore {
         session
     }
 
+    /// Atomically check per-agent session cap and create if under the limit.
+    /// Prevents the TOCTOU race where two concurrent requests both pass the
+    /// count check before either creates a session.
+    pub async fn create_if_under_cap(
+        &self,
+        req: CreateSessionRequest,
+        max_sessions: u64,
+    ) -> Result<TaskSession, SessionError> {
+        let mut sessions = self.sessions.write().await;
+
+        let active_count = sessions
+            .values()
+            .filter(|s| s.agent_id == req.agent_id && s.status == SessionStatus::Active)
+            .count() as u64;
+
+        if active_count >= max_sessions {
+            return Err(SessionError::TooManySessions {
+                agent_id: req.agent_id.to_string(),
+                max: max_sessions,
+                current: active_count,
+            });
+        }
+
+        let session = TaskSession {
+            session_id: Uuid::new_v4(),
+            agent_id: req.agent_id,
+            delegation_chain_snapshot: req.delegation_chain_snapshot,
+            declared_intent: req.declared_intent,
+            authorized_tools: req.authorized_tools,
+            authorized_credentials: req.authorized_credentials,
+            time_limit: req.time_limit,
+            call_budget: req.call_budget,
+            calls_made: 0,
+            rate_limit_per_minute: req.rate_limit_per_minute,
+            rate_window_start: Utc::now(),
+            rate_window_calls: 0,
+            rate_limit_window_secs: req.rate_limit_window_secs,
+            data_sensitivity_ceiling: req.data_sensitivity_ceiling,
+            created_at: Utc::now(),
+            status: SessionStatus::Active,
+        };
+
+        sessions.insert(session.session_id, session.clone());
+        Ok(session)
+    }
+
     /// Record a tool call against the session, checking all constraints.
     ///
     /// Returns the updated session on success, or an error if:
@@ -89,11 +150,23 @@ impl SessionStore {
         &self,
         session_id: SessionId,
         tool_name: &str,
+        requesting_agent_id: Option<Uuid>,
     ) -> Result<TaskSession, SessionError> {
         let mut sessions = self.sessions.write().await;
         let session = sessions
             .get_mut(&session_id)
             .ok_or(SessionError::NotFound(session_id))?;
+
+        // Verify agent binding to prevent session fixation.
+        if let Some(agent_id) = requesting_agent_id {
+            if agent_id != session.agent_id {
+                return Err(SessionError::AgentMismatch {
+                    session_id,
+                    expected: session.agent_id,
+                    actual: agent_id,
+                });
+            }
+        }
 
         if session.status == SessionStatus::Closed {
             return Err(SessionError::AlreadyClosed(session_id));
@@ -154,11 +227,23 @@ impl SessionStore {
         &self,
         session_id: SessionId,
         tool_names: &[&str],
+        requesting_agent_id: Option<Uuid>,
     ) -> Result<TaskSession, SessionError> {
         let mut sessions = self.sessions.write().await;
         let session = sessions
             .get_mut(&session_id)
             .ok_or(SessionError::NotFound(session_id))?;
+
+        // Verify agent binding to prevent session fixation.
+        if let Some(agent_id) = requesting_agent_id {
+            if agent_id != session.agent_id {
+                return Err(SessionError::AgentMismatch {
+                    session_id,
+                    expected: session.agent_id,
+                    actual: agent_id,
+                });
+            }
+        }
 
         if session.status == SessionStatus::Closed {
             return Err(SessionError::AlreadyClosed(session_id));
@@ -264,6 +349,18 @@ impl SessionStore {
         sessions.values().cloned().collect()
     }
 
+    /// List only sessions belonging to a specific agent.
+    /// Use this instead of list_all() when agent-scoped access is needed
+    /// to prevent cross-agent session data exposure.
+    pub async fn list_for_agent(&self, agent_id: Uuid) -> Vec<TaskSession> {
+        let sessions = self.sessions.read().await;
+        sessions
+            .values()
+            .filter(|s| s.agent_id == agent_id)
+            .cloned()
+            .collect()
+    }
+
     /// Count the number of active sessions for a given agent.
     ///
     /// P0: Used to enforce per-agent concurrent session caps.
@@ -337,6 +434,7 @@ mod tests {
             delegation_chain_snapshot: vec![],
             declared_intent: "read and analyze files".into(),
             authorized_tools: vec!["read_file".into(), "list_dir".into()],
+            authorized_credentials: vec![],
             time_limit: chrono::Duration::hours(1),
             call_budget: 5,
             rate_limit_per_minute: None,
@@ -354,7 +452,7 @@ mod tests {
         assert!(session.is_active());
 
         let updated = store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
         assert_eq!(updated.calls_made, 1);
@@ -369,16 +467,16 @@ mod tests {
 
         // Use up the budget.
         store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
         store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
 
         // Third call should fail.
-        let result = store.use_session(session.session_id, "read_file").await;
+        let result = store.use_session(session.session_id, "read_file", None).await;
         assert!(matches!(result, Err(SessionError::BudgetExceeded { .. })));
     }
 
@@ -389,12 +487,12 @@ mod tests {
 
         // Authorized tool works.
         store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
 
         // Unauthorized tool is rejected.
-        let result = store.use_session(session.session_id, "delete_file").await;
+        let result = store.use_session(session.session_id, "delete_file", None).await;
         assert!(matches!(
             result,
             Err(SessionError::ToolNotAuthorized { .. })
@@ -405,16 +503,15 @@ mod tests {
     async fn session_expiry() {
         let store = SessionStore::new();
         let mut req = test_create_request();
-        // Set a very short time limit (zero duration = immediately expired on next check).
-        req.time_limit = chrono::Duration::zero();
+        // Set a 1-second time limit (minimum enforced by create()).
+        // Previously used zero, but minimum is now clamped to 1s.
+        req.time_limit = chrono::Duration::seconds(1);
         let session = store.create(req).await;
 
-        // The session was just created, but with zero duration it expires immediately.
-        // We need the clock to advance at least slightly, which it does between create and use.
-        // Use tokio::time::sleep to guarantee advancement.
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        // Wait for the session to expire.
+        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
 
-        let result = store.use_session(session.session_id, "read_file").await;
+        let result = store.use_session(session.session_id, "read_file", None).await;
         assert!(matches!(result, Err(SessionError::Expired(_))));
     }
 
@@ -425,7 +522,7 @@ mod tests {
 
         store.close(session.session_id).await.unwrap();
 
-        let result = store.use_session(session.session_id, "read_file").await;
+        let result = store.use_session(session.session_id, "read_file", None).await;
         assert!(matches!(result, Err(SessionError::AlreadyClosed(_))));
     }
 
@@ -433,16 +530,17 @@ mod tests {
     async fn cleanup_expired_sessions() {
         let store = SessionStore::new();
 
-        // Create an already-expired session.
+        // Create a short-lived session (1s minimum).
         let mut req = test_create_request();
-        req.time_limit = chrono::Duration::zero();
+        req.time_limit = chrono::Duration::seconds(1);
         store.create(req).await;
 
-        // Create a valid session.
+        // Create a valid session with longer limit.
         let valid_req = test_create_request();
         store.create(valid_req).await;
 
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        // Wait for the short session to expire.
+        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
 
         let removed = store.cleanup_expired().await;
         assert_eq!(removed, 1);
@@ -452,7 +550,7 @@ mod tests {
     async fn session_not_found() {
         let store = SessionStore::new();
         let fake_id = Uuid::new_v4();
-        let result = store.use_session(fake_id, "anything").await;
+        let result = store.use_session(fake_id, "anything", None).await;
         assert!(matches!(result, Err(SessionError::NotFound(_))));
     }
 
@@ -466,20 +564,20 @@ mod tests {
 
         // First 3 calls succeed (within rate limit).
         store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
         store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
         store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
 
         // 4th call hits rate limit.
-        let result = store.use_session(session.session_id, "read_file").await;
+        let result = store.use_session(session.session_id, "read_file", None).await;
         assert!(
             matches!(result, Err(SessionError::RateLimited { .. })),
             "expected RateLimited, got {result:?}"
@@ -497,7 +595,7 @@ mod tests {
         // All calls succeed without rate limiting.
         for _ in 0..10 {
             store
-                .use_session(session.session_id, "read_file")
+                .use_session(session.session_id, "read_file", None)
                 .await
                 .unwrap();
         }
@@ -514,7 +612,7 @@ mod tests {
 
         // Batch contains one unauthorized tool ("delete_file").
         let result = store
-            .use_session_batch(session.session_id, &["read_file", "delete_file"])
+            .use_session_batch(session.session_id, &["read_file", "delete_file"], None)
             .await;
         assert!(
             matches!(result, Err(SessionError::ToolNotAuthorized { .. })),
@@ -542,6 +640,7 @@ mod tests {
             .use_session_batch(
                 session.session_id,
                 &["read_file", "read_file", "read_file", "read_file"],
+                None,
             )
             .await;
         assert!(
@@ -571,6 +670,7 @@ mod tests {
             .use_session_batch(
                 session.session_id,
                 &["read_file", "read_file", "read_file", "read_file"],
+                None,
             )
             .await;
         assert!(
@@ -586,7 +686,7 @@ mod tests {
 
         // Empty batch should succeed without consuming budget.
         let result = store
-            .use_session_batch(session.session_id, &[])
+            .use_session_batch(session.session_id, &[], None)
             .await
             .unwrap();
         assert_eq!(result.calls_made, 0, "empty batch must not consume budget");
@@ -621,7 +721,7 @@ mod tests {
         req.call_budget = 0;
         let session = store.create(req).await;
 
-        let result = store.use_session(session.session_id, "read_file").await;
+        let result = store.use_session(session.session_id, "read_file", None).await;
         assert!(
             matches!(result, Err(SessionError::BudgetExceeded { .. })),
             "zero-budget session must reject the first call, got {result:?}"
@@ -678,7 +778,7 @@ mod tests {
             let s = successes.clone();
             let f = failures.clone();
             handles.push(tokio::spawn(async move {
-                match store.use_session(sid, "read_file").await {
+                match store.use_session(sid, "read_file", None).await {
                     Ok(_) => {
                         s.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     }
@@ -703,6 +803,46 @@ mod tests {
             failures.load(std::sync::atomic::Ordering::Relaxed),
             5,
             "exactly 5 calls should fail with BudgetExceeded"
+        );
+    }
+
+    /// Session fixation prevention: a different agent must not be able to use
+    /// another agent's session by presenting its session ID.
+    #[tokio::test]
+    async fn agent_mismatch_rejected() {
+        let store = SessionStore::new();
+        let session = store.create(test_create_request()).await;
+        let attacker_id = Uuid::new_v4();
+
+        // Attacker presents a different agent_id than the session owner.
+        let result = store
+            .use_session(session.session_id, "read_file", Some(attacker_id))
+            .await;
+        assert!(
+            matches!(result, Err(SessionError::AgentMismatch { .. })),
+            "different agent must be rejected, got {result:?}"
+        );
+
+        // Legitimate agent succeeds.
+        let result = store
+            .use_session(session.session_id, "read_file", Some(session.agent_id))
+            .await;
+        assert!(result.is_ok(), "session owner should succeed");
+    }
+
+    /// Batch variant of agent mismatch check.
+    #[tokio::test]
+    async fn batch_agent_mismatch_rejected() {
+        let store = SessionStore::new();
+        let session = store.create(test_create_request()).await;
+        let attacker_id = Uuid::new_v4();
+
+        let result = store
+            .use_session_batch(session.session_id, &["read_file"], Some(attacker_id))
+            .await;
+        assert!(
+            matches!(result, Err(SessionError::AgentMismatch { .. })),
+            "batch with wrong agent must be rejected, got {result:?}"
         );
     }
 }

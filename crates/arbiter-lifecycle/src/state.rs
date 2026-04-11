@@ -3,7 +3,7 @@ use arbiter_identity::{AnyRegistry, InMemoryRegistry};
 use arbiter_metrics::ArbiterMetrics;
 use arbiter_policy::PolicyConfig;
 use arbiter_session::{AnySessionStore, SessionStore};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -12,18 +12,15 @@ use uuid::Uuid;
 
 use crate::token::TokenConfig;
 
-/// Simple sliding-window rate limiter for admin API endpoints.
+/// Per-client sliding-window rate limiter for admin API endpoints.
 ///
-/// Without rate limiting, an attacker who compromises the admin
-/// API key can make unlimited requests, enabling rapid brute-force enumeration
-/// of agents/sessions and denial-of-service against the control plane.
-///
-/// This implements a global sliding window: it tracks timestamps of recent
-/// requests and rejects new ones when the window is full.
+/// Tracks request timestamps per source key (IP address or API key),
+/// preventing a single attacker from exhausting the rate limit budget
+/// for all legitimate operators.
 pub struct AdminRateLimiter {
-    /// Timestamps of requests within the current window.
-    window: Mutex<VecDeque<Instant>>,
-    /// Maximum requests allowed per window.
+    /// Per-client windows: key -> timestamps within window.
+    clients: Mutex<HashMap<String, VecDeque<Instant>>>,
+    /// Maximum requests allowed per window per client.
     max_requests: u64,
     /// Sliding window duration.
     window_duration: Duration,
@@ -33,19 +30,20 @@ impl AdminRateLimiter {
     /// Create a new rate limiter with the given capacity and window duration.
     pub fn new(max_requests: u64, window_duration: Duration) -> Self {
         Self {
-            window: Mutex::new(VecDeque::new()),
+            clients: Mutex::new(HashMap::new()),
             max_requests,
             window_duration,
         }
     }
 
-    /// Check whether a request should be allowed.
+    /// Check whether a request from the given client key should be allowed.
     ///
     /// Returns `true` if the request is within the rate limit, `false` if it
-    /// should be rejected. Automatically evicts expired entries from the window.
-    pub fn check_rate_limit(&self) -> bool {
+    /// should be rejected.
+    pub fn check_rate_limit(&self, client_key: &str) -> bool {
         let now = Instant::now();
-        let mut window = self.window.lock().unwrap_or_else(|e| e.into_inner());
+        let mut clients = self.clients.lock().unwrap_or_else(|e| e.into_inner());
+        let window = clients.entry(client_key.to_string()).or_default();
 
         // Evict timestamps outside the sliding window.
         while let Some(&front) = window.front() {
@@ -62,6 +60,11 @@ impl AdminRateLimiter {
             window.push_back(now);
             true
         }
+    }
+
+    /// Backward-compatible global check (uses "__global__" as the key).
+    pub fn check_rate_limit_global(&self) -> bool {
+        self.check_rate_limit("__global__")
     }
 }
 
@@ -94,9 +97,21 @@ pub struct AppState {
 /// Default admin API rate limit: 60 requests per minute.
 const DEFAULT_ADMIN_MAX_REQUESTS_PER_MINUTE: u64 = 60;
 
+/// Minimum admin API key length. Keys shorter than this are likely
+/// trivially brutable or are default/placeholder values.
+pub const MIN_ADMIN_API_KEY_LEN: usize = 16;
+
 impl AppState {
     /// Create a new application state with the given admin API key.
     pub fn new(admin_api_key: String) -> Self {
+        if admin_api_key.len() < MIN_ADMIN_API_KEY_LEN {
+            tracing::error!(
+                length = admin_api_key.len(),
+                minimum = MIN_ADMIN_API_KEY_LEN,
+                "admin API key is shorter than minimum recommended length; \
+                 the gateway will start but authentication is weakened"
+            );
+        }
         Self {
             registry: Arc::new(AnyRegistry::InMemory(InMemoryRegistry::new())),
             admin_api_key,

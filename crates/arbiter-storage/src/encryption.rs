@@ -36,16 +36,28 @@ pub enum EncryptionError {
     InvalidCiphertext(String),
 }
 
+/// Current key version byte. Prepended to every encrypted blob.
+/// When key rotation occurs, a new version can be assigned and the
+/// decryptor tries all known versions.
+const CURRENT_KEY_VERSION: u8 = 1;
+
 /// Field-level encryption using AES-256-GCM.
 ///
 /// Each encrypted field has the wire format:
-///   `base64(nonce_12_bytes || ciphertext_with_tag)`
+///   `base64(key_version_1 || nonce_12_bytes || ciphertext_with_tag)`
+///
+/// The 1-byte key version prefix enables future key rotation: the decryptor
+/// can identify which key was used and select the correct one.
 ///
 /// A fresh random nonce is generated for every `encrypt_*` call, so
 /// encrypting the same plaintext twice yields different ciphertext.
 #[derive(Clone)]
 pub struct FieldEncryptor {
+    /// Current key for encryption and decryption.
     cipher: Aes256Gcm,
+    /// Previous key for decrypting old blobs during rotation.
+    /// When set, decrypt_field tries the current key first, then falls back.
+    previous_cipher: Option<Aes256Gcm>,
 }
 
 impl FieldEncryptor {
@@ -53,7 +65,16 @@ impl FieldEncryptor {
     pub fn new(key: &[u8; 32]) -> Self {
         Self {
             cipher: Aes256Gcm::new(key.into()),
+            previous_cipher: None,
         }
+    }
+
+    /// Set a previous key for rotation. During decryption, if the current
+    /// key fails, the previous key is tried. This allows a rolling upgrade
+    /// window where old data is still readable.
+    pub fn with_previous_key(mut self, key: &[u8; 32]) -> Self {
+        self.previous_cipher = Some(Aes256Gcm::new(key.into()));
+        self
     }
 
     /// Create from a hex-encoded key string (64 hex chars = 32 bytes).
@@ -67,6 +88,19 @@ impl FieldEncryptor {
             .try_into()
             .map_err(|_| EncryptionError::InvalidKeyLength(0))?;
         Ok(Self::new(&key))
+    }
+
+    /// Create from a hex-encoded previous key for rotation support.
+    pub fn with_previous_hex_key(self, hex_key: &str) -> Result<Self, EncryptionError> {
+        let hex_key = hex_key.trim();
+        if hex_key.len() != 64 {
+            return Err(EncryptionError::InvalidKeyLength(hex_key.len()));
+        }
+        let bytes = hex_decode(hex_key)?;
+        let key: [u8; 32] = bytes
+            .try_into()
+            .map_err(|_| EncryptionError::InvalidKeyLength(0))?;
+        Ok(self.with_previous_key(&key))
     }
 
     /// Create from the `ARBITER_STORAGE_ENCRYPTION_KEY` environment variable.
@@ -93,8 +127,9 @@ impl FieldEncryptor {
             .encrypt(nonce, plaintext.as_bytes())
             .map_err(|e| EncryptionError::EncryptionFailed(e.to_string()))?;
 
-        // nonce || ciphertext
-        let mut combined = Vec::with_capacity(12 + ciphertext.len());
+        // version || nonce || ciphertext
+        let mut combined = Vec::with_capacity(1 + 12 + ciphertext.len());
+        combined.push(CURRENT_KEY_VERSION);
         combined.extend_from_slice(&nonce_bytes);
         combined.extend_from_slice(&ciphertext);
 
@@ -108,22 +143,43 @@ impl FieldEncryptor {
             .decode(encoded)
             .map_err(|e| EncryptionError::InvalidCiphertext(e.to_string()))?;
 
-        if combined.len() < 13 {
-            // 12-byte nonce + at least 1 byte ciphertext
+        // Detect versioned vs legacy format.
+        // Versioned: version_1 || nonce_12 || ciphertext (min 14 bytes)
+        // Legacy:    nonce_12 || ciphertext (min 13 bytes, first byte is random nonce)
+        let (nonce_bytes, ciphertext) = if !combined.is_empty() && combined[0] == CURRENT_KEY_VERSION && combined.len() >= 14 {
+            // Versioned format: skip the version byte.
+            (&combined[1..13], &combined[13..])
+        } else if combined.len() >= 13 {
+            // Legacy format (no version prefix): nonce starts at offset 0.
+            (&combined[..12], &combined[12..])
+        } else {
             return Err(EncryptionError::InvalidCiphertext(
                 "ciphertext too short".into(),
             ));
-        }
+        };
 
-        let (nonce_bytes, ciphertext) = combined.split_at(12);
         let nonce = Nonce::from_slice(nonce_bytes);
 
-        let plaintext = self
-            .cipher
-            .decrypt(nonce, ciphertext)
-            .map_err(|e| EncryptionError::DecryptionFailed(e.to_string()))?;
-
-        String::from_utf8(plaintext).map_err(|e| EncryptionError::DecryptionFailed(e.to_string()))
+        // Try current key first.
+        match self.cipher.decrypt(nonce, ciphertext) {
+            Ok(plaintext) => {
+                return String::from_utf8(plaintext)
+                    .map_err(|e| EncryptionError::DecryptionFailed(e.to_string()));
+            }
+            Err(current_err) => {
+                // If a previous key is configured, try it (key rotation support).
+                if let Some(ref prev) = self.previous_cipher {
+                    match prev.decrypt(nonce, ciphertext) {
+                        Ok(plaintext) => {
+                            return String::from_utf8(plaintext)
+                                .map_err(|e| EncryptionError::DecryptionFailed(e.to_string()));
+                        }
+                        Err(_) => {}
+                    }
+                }
+                Err(EncryptionError::DecryptionFailed(current_err.to_string()))
+            }
+        }
     }
 
     /// Encrypt a `Vec<String>` by JSON-serializing then encrypting.

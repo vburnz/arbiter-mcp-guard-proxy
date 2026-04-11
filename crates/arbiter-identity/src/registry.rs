@@ -176,7 +176,14 @@ impl AgentRegistry for InMemoryRegistry {
 
     async fn list_agents(&self) -> Vec<Agent> {
         let agents = self.agents.read().await;
-        agents.values().cloned().collect()
+        let now = Utc::now();
+        agents
+            .values()
+            .filter(|a| {
+                a.active && a.expires_at.map_or(true, |exp| now < exp)
+            })
+            .cloned()
+            .collect()
     }
 
     async fn create_delegation(
@@ -201,8 +208,51 @@ impl AgentRegistry for InMemoryRegistry {
         }
 
         // Verify target exists
-        if !agents.contains_key(&to) {
-            return Err(IdentityError::DelegationTargetNotFound(to));
+        let target = agents
+            .get(&to)
+            .ok_or(IdentityError::DelegationTargetNotFound(to))?;
+
+        // Prevent cross-owner delegation: the from and to agents must belong
+        // to the same owner. Without this, a compromised agent under one
+        // principal can grant capabilities to an agent owned by a different
+        // principal with no registry-level enforcement.
+        if parent.owner != target.owner {
+            return Err(IdentityError::CrossOwnerDelegation {
+                from,
+                to,
+                from_owner: parent.owner.clone(),
+                to_owner: target.owner.clone(),
+            });
+        }
+
+        // Enforce maximum delegation chain depth to prevent resource exhaustion.
+        const MAX_CHAIN_DEPTH: usize = 10;
+        {
+            let delegations = self.delegations.read().await;
+            let mut depth = 0;
+            let mut current = from;
+            loop {
+                match delegations.iter().find(|d| d.to == current) {
+                    Some(link) => {
+                        depth += 1;
+                        if depth >= MAX_CHAIN_DEPTH {
+                            return Err(IdentityError::InternalError(format!(
+                                "delegation chain depth would exceed maximum of {MAX_CHAIN_DEPTH}"
+                            )));
+                        }
+                        current = link.from;
+                    }
+                    None => break,
+                }
+            }
+        }
+
+        // Reject empty scope_narrowing: an empty list has ambiguous semantics
+        // ("no access" vs "all parent scopes"). Force callers to be explicit.
+        if scope_narrowing.is_empty() {
+            return Err(IdentityError::InternalError(
+                "scope_narrowing must not be empty; specify at least one scope".into(),
+            ));
         }
 
         // Enforce scope narrowing: every requested scope must exist in parent's capabilities
@@ -706,11 +756,11 @@ mod tests {
         let registry = InMemoryRegistry::new();
         let mut agents = Vec::new();
 
-        // Create 10 agents: A through J
+        // Create 10 agents under the same owner (cross-owner delegation is now blocked).
         for i in 0..10 {
             let agent = registry
                 .register_agent(
-                    format!("user:{i}"),
+                    "user:alice".into(),
                     format!("model-{i}"),
                     vec!["read".into()],
                     TrustLevel::Trusted,
@@ -746,7 +796,7 @@ mod tests {
 
         let a = registry
             .register_agent(
-                "user:a".into(),
+                "user:alice".into(),
                 "model-a".into(),
                 vec!["read".into()],
                 TrustLevel::Trusted,
@@ -757,7 +807,7 @@ mod tests {
 
         let b = registry
             .register_agent(
-                "user:b".into(),
+                "user:alice".into(),
                 "model-b".into(),
                 vec!["read".into()],
                 TrustLevel::Trusted,
@@ -790,7 +840,8 @@ mod tests {
     #[tokio::test]
     async fn deep_delegation_chain_does_not_overflow() {
         let registry = InMemoryRegistry::new();
-        let chain_len = 50;
+        // Max chain depth is 10, so we use 10 agents (9 links).
+        let chain_len = 10;
         let mut agents = Vec::with_capacity(chain_len);
 
         // Register 50 agents, all with the same capabilities so scope narrowing
@@ -798,7 +849,7 @@ mod tests {
         for i in 0..chain_len {
             let agent = registry
                 .register_agent(
-                    format!("user:deep-{i}"),
+                    "user:alice".into(),
                     format!("model-deep-{i}"),
                     vec!["read".into()],
                     TrustLevel::Trusted,

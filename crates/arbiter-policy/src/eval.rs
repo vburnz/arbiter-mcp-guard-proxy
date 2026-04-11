@@ -78,6 +78,18 @@ pub struct PolicyTrace {
     /// Why it didn't match (if it didn't).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skip_reason: Option<String>,
+    /// Agent ID for audit trail.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    /// Principal sub for audit trail.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub principal_sub: Option<String>,
+    /// Tool name for audit trail.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    /// Evaluation timestamp.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Result of policy evaluation with full reasoning trace.
@@ -99,34 +111,70 @@ pub fn evaluate_explained(
     let mut trace = Vec::new();
 
     let mut matching: Vec<(&Policy, i32)> = Vec::new();
+    let trace_tool = request.tool_name.clone().unwrap_or_else(|| request.method.clone());
+    let trace_agent = ctx.agent.id.to_string();
+    let trace_principal = ctx.principal_sub.clone();
+    let trace_ts = chrono::Utc::now();
 
     for policy in &config.policies {
         let skip = explain_mismatch(policy, ctx, request);
         let specificity = policy.specificity();
 
+        let base = PolicyTrace {
+            policy_id: policy.id.clone(),
+            matched: skip.is_none(),
+            effect: format!("{:?}", policy.effect).to_lowercase(),
+            specificity,
+            disposition: Some(format!("{:?}", policy.disposition).to_lowercase()),
+            skip_reason: skip.clone(),
+            agent_id: Some(trace_agent.clone()),
+            principal_sub: Some(trace_principal.clone()),
+            tool_name: Some(trace_tool.clone()),
+            timestamp: Some(trace_ts),
+        };
+
         if skip.is_none() {
             matching.push((policy, specificity));
-            trace.push(PolicyTrace {
-                policy_id: policy.id.clone(),
-                matched: true,
-                effect: format!("{:?}", policy.effect).to_lowercase(),
-                specificity,
-                disposition: Some(format!("{:?}", policy.disposition).to_lowercase()),
-                skip_reason: None,
-            });
-        } else {
-            trace.push(PolicyTrace {
-                policy_id: policy.id.clone(),
-                matched: false,
-                effect: format!("{:?}", policy.effect).to_lowercase(),
-                specificity,
-                disposition: Some(format!("{:?}", policy.disposition).to_lowercase()),
-                skip_reason: skip,
-            });
         }
+        trace.push(base);
     }
 
     matching.sort_by(|a, b| b.1.cmp(&a.1));
+
+    // Enforce delegation chain scope narrowing.
+    // If the agent has a delegation chain with scope_narrowing, the requested
+    // tool must be within the intersection of all narrowed scopes across the
+    // chain. This prevents a delegated sub-agent from exceeding the scope
+    // granted by its delegation links, regardless of what policies allow.
+    if !ctx.delegation_chain.is_empty() {
+        let tool_name = request
+            .tool_name
+            .as_deref()
+            .unwrap_or(&request.method);
+
+        for link in &ctx.delegation_chain {
+            if !link.scope_narrowing.is_empty()
+                && !link.scope_narrowing.iter().any(|s| s == tool_name)
+            {
+                tracing::warn!(
+                    tool = tool_name,
+                    scope = ?link.scope_narrowing,
+                    from = %link.from,
+                    to = %link.to,
+                    "delegation scope_narrowing denies tool access"
+                );
+                return EvalResult {
+                    decision: Decision::Deny {
+                        reason: format!(
+                            "tool '{}' not in delegation scope narrowing",
+                            tool_name
+                        ),
+                    },
+                    trace,
+                };
+            }
+        }
+    }
 
     let decision = match matching.first() {
         Some((policy, _)) => {
@@ -309,22 +357,65 @@ fn matches_intent(intent_match: &IntentMatch, declared_intent: &str) -> bool {
 fn matches_tool(policy: &Policy, request: &McpRequest) -> bool {
     // Empty allowed_tools means "applies to all tools".
     if policy.allowed_tools.is_empty() {
-        return true;
+        return matches_resource_uri(policy, request);
     }
 
     // For tool calls, the tool name must be in the allowed list.
+    // Case-insensitive comparison prevents bypass via case manipulation
+    // (e.g., "Read_File" vs "read_file") when the downstream MCP server
+    // is case-insensitive.
     if let Some(ref tool_name) = request.tool_name {
-        return policy.allowed_tools.iter().any(|t| t == tool_name);
+        let lower = tool_name.to_lowercase();
+        return policy
+            .allowed_tools
+            .iter()
+            .any(|t| t.to_lowercase() == lower);
+    }
+
+    // tools/call with no valid tool_name (filtered by is_valid_tool_name)
+    // must NOT fall through to method matching. Deny-by-default will catch it.
+    if request.method == "tools/call" {
+        return false;
     }
 
     // Non-tool-call requests (resources/read, etc.) must also
     // be checked against allowed_tools. Use the MCP method as the "tool name" for
     // matching. If the method isn't in the allowed list, the policy doesn't match,
     // and deny-by-default will catch it.
-    policy.allowed_tools.iter().any(|t| t == &request.method)
+    let method_matches = policy.allowed_tools.iter().any(|t| t == &request.method);
+    if !method_matches {
+        return false;
+    }
+    // Additionally check resource_uri for resource methods.
+    matches_resource_uri(policy, request)
+}
+
+/// Check if the request's resource_uri matches the policy's resource_match prefixes.
+/// Returns true if resource_match is empty (no URI restriction) or if the request's
+/// resource_uri starts with any of the configured prefixes.
+fn matches_resource_uri(policy: &Policy, request: &McpRequest) -> bool {
+    if policy.resource_match.is_empty() {
+        return true;
+    }
+    match &request.resource_uri {
+        Some(uri) => policy.resource_match.iter().any(|prefix| uri.starts_with(prefix)),
+        // No resource_uri on the request but policy has resource_match set:
+        // the policy requires a specific URI pattern, so this doesn't match.
+        None => false,
+    }
 }
 
 /// Check parameter constraints against request arguments.
+/// Traverse a dot-separated key path into a JSON value.
+/// e.g., "arguments.max_tokens" traverses into {"arguments": {"max_tokens": 5000}}.
+fn traverse_dot_path<'a>(value: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::Value> {
+    let mut current = value;
+    for segment in path.split('.') {
+        current = current.get(segment)?;
+    }
+    Some(current)
+}
+
 fn matches_parameter_constraints(
     constraints: &[ParameterConstraint],
     request: &McpRequest,
@@ -341,7 +432,7 @@ fn matches_parameter_constraints(
     };
 
     for constraint in constraints {
-        if let Some(value) = args.get(&constraint.key) {
+        if let Some(value) = traverse_dot_path(args, &constraint.key) {
             // Type confusion bypass prevention.
             // Constraints must reject values whose type doesn't match what the
             // constraint expects. Previously, sending a string where a number was
@@ -473,6 +564,7 @@ mod tests {
                     ..Default::default()
                 },
                 allowed_tools: vec!["read_file".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -502,6 +594,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["delete_file".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Deny,
                 disposition: Disposition::Block,
@@ -529,6 +622,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["read_file".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -563,7 +657,8 @@ mod tests {
                         ..Default::default()
                     },
                     allowed_tools: vec!["read_file".into()],
-                    parameter_constraints: vec![],
+                    resource_match: vec![],
+                parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -580,7 +675,8 @@ mod tests {
                         ..Default::default()
                     },
                     allowed_tools: vec!["write_file".into()],
-                    parameter_constraints: vec![],
+                    resource_match: vec![],
+                parameter_constraints: vec![],
                     effect: Effect::Escalate,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -606,6 +702,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["generate".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![ParameterConstraint {
                     key: "max_tokens".into(),
                     max_value: Some(1000.0),
@@ -663,7 +760,8 @@ mod tests {
                     principal_match: Default::default(),
                     intent_match: Default::default(),
                     allowed_tools: vec!["admin_tool".into()],
-                    parameter_constraints: vec![],
+                    resource_match: vec![],
+                parameter_constraints: vec![],
                     effect: Effect::Deny,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -677,7 +775,8 @@ mod tests {
                     principal_match: Default::default(),
                     intent_match: Default::default(),
                     allowed_tools: vec!["admin_tool".into()],
-                    parameter_constraints: vec![],
+                    resource_match: vec![],
+                parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -713,6 +812,7 @@ mod tests {
                     ..Default::default()
                 },
                 allowed_tools: vec![],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -746,7 +846,8 @@ mod tests {
                     principal_match: Default::default(),
                     intent_match: Default::default(),
                     allowed_tools: vec!["read_file".into(), "list_dir".into()],
-                    parameter_constraints: vec![],
+                    resource_match: vec![],
+                parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -757,7 +858,8 @@ mod tests {
                     principal_match: Default::default(),
                     intent_match: Default::default(),
                     allowed_tools: vec!["read_file".into(), "search".into()],
-                    parameter_constraints: vec![],
+                    resource_match: vec![],
+                parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -768,7 +870,8 @@ mod tests {
                     principal_match: Default::default(),
                     intent_match: Default::default(),
                     allowed_tools: vec!["delete_file".into()],
-                    parameter_constraints: vec![],
+                    resource_match: vec![],
+                parameter_constraints: vec![],
                     effect: Effect::Deny,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -791,6 +894,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["write_file".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Deny,
                 disposition: Disposition::Annotate,
@@ -818,6 +922,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["write_file".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Deny,
                 disposition: Disposition::Block,
@@ -842,6 +947,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec![],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Deny,
                 disposition: Disposition::Annotate,
@@ -923,6 +1029,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["secret_tool".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -974,6 +1081,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["generate".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![ParameterConstraint {
                     key: "max_tokens".into(),
                     max_value: Some(1000.0),
@@ -1047,6 +1155,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec![], // empty = wildcard
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -1092,6 +1201,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["read_file".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -1127,6 +1237,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["resources/read".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -1151,6 +1262,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec![], // wildcard
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -1191,7 +1303,8 @@ mod tests {
                     principal_match: Default::default(),
                     intent_match: Default::default(),
                     allowed_tools: vec![],
-                    parameter_constraints: vec![],
+                    resource_match: vec![],
+                parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -1205,7 +1318,8 @@ mod tests {
                     principal_match: Default::default(),
                     intent_match: Default::default(),
                     allowed_tools: vec![],
-                    parameter_constraints: vec![],
+                    resource_match: vec![],
+                parameter_constraints: vec![],
                     effect: Effect::Deny,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -1254,6 +1368,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["generate".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![ParameterConstraint {
                     key: "max_tokens".into(),
                     max_value: Some(100.0),
@@ -1369,6 +1484,7 @@ mod tests {
                     ..Default::default()
                 },
                 allowed_tools: vec![],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -1416,6 +1532,7 @@ mod tests {
                     compiled_keywords: vec![],
                 },
                 allowed_tools: vec![],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -1472,8 +1589,8 @@ mod tests {
         assert_eq!(ctx.delegation_chain[0].scope_narrowing, vec!["read"]);
         assert_eq!(ctx.delegation_chain[0].to, ctx.agent.id);
 
-        // Verify evaluation still works with a non-empty chain (it should
-        // not interfere with matching since the engine doesn't filter on it).
+        // Delegation scope_narrowing is now enforced: tools outside the
+        // narrowed scope are denied even if an Allow policy matches.
         let config = PolicyConfig {
             policies: vec![Policy {
                 id: "allow-all".into(),
@@ -1481,17 +1598,29 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec![],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
                 priority: 0,
             }],
         };
-        let request = tool_call_request("any_tool");
-        let decision = evaluate(&config, &ctx, &request);
+
+        // "read" is in scope, so it should be allowed.
+        let request_in_scope = tool_call_request("read");
+        let decision = evaluate(&config, &ctx, &request_in_scope);
         assert!(
             matches!(decision, Decision::Allow { .. }),
-            "delegation chain must not interfere with evaluation, got {:?}",
+            "in-scope tool should be allowed, got {:?}",
+            decision
+        );
+
+        // "any_tool" is NOT in scope ["read"], so it should be denied.
+        let request_out_of_scope = tool_call_request("any_tool");
+        let decision = evaluate(&config, &ctx, &request_out_of_scope);
+        assert!(
+            matches!(decision, Decision::Deny { ref reason } if reason.contains("delegation scope")),
+            "out-of-scope tool must be denied by delegation chain, got {:?}",
             decision
         );
     }
@@ -1519,6 +1648,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["read_file".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -1559,7 +1689,8 @@ mod tests {
                     principal_match: Default::default(),
                     intent_match: Default::default(),
                     allowed_tools: vec![], // empty = wildcard, matches everything
-                    parameter_constraints: vec![],
+                    resource_match: vec![],
+                parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 10, // low priority
@@ -1571,7 +1702,8 @@ mod tests {
                     principal_match: Default::default(),
                     intent_match: Default::default(),
                     allowed_tools: vec!["delete_file".into()],
-                    parameter_constraints: vec![],
+                    resource_match: vec![],
+                parameter_constraints: vec![],
                     effect: Effect::Deny,
                     disposition: Disposition::Block,
                     priority: 100, // high priority
@@ -1620,6 +1752,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["generate".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![ParameterConstraint {
                     key: "max_tokens".into(),
                     max_value: Some(1000.0),
@@ -1666,6 +1799,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["read_file".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![ParameterConstraint {
                     key: "path".into(),
                     max_value: None,
@@ -1708,6 +1842,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec!["read_file".into()],
+                resource_match: vec![],
                 parameter_constraints: vec![ParameterConstraint {
                     key: "path".into(),
                     max_value: None,
@@ -1761,6 +1896,7 @@ mod tests {
                 principal_match: Default::default(),
                 intent_match: Default::default(),
                 allowed_tools: vec![format!("tool_{}", i)],
+                resource_match: vec![],
                 parameter_constraints: vec![],
                 effect: Effect::Allow,
                 disposition: Disposition::Block,
@@ -1792,6 +1928,91 @@ mod tests {
             matches!(decision, Decision::Deny { ref reason } if reason.contains("deny-by-default")),
             "nonexistent tool must be denied by default in a 1000-policy config, got {:?}",
             decision
+        );
+    }
+
+    /// Delegation scope_narrowing must deny tool calls outside the narrowed scope,
+    /// even when a matching Allow policy exists.
+    #[test]
+    fn delegation_scope_narrowing_denies_out_of_scope_tool() {
+        let config = PolicyConfig {
+            policies: vec![Policy {
+                id: "allow-all".into(),
+                agent_match: Default::default(),
+                principal_match: Default::default(),
+                intent_match: Default::default(),
+                allowed_tools: vec!["read_file".into(), "write_file".into()],
+                resource_match: vec![],
+                parameter_constraints: vec![],
+                effect: Effect::Allow,
+                disposition: Disposition::Block,
+                priority: 0,
+            }],
+        };
+
+        let agent = test_agent(TrustLevel::Trusted, vec!["read", "write"]);
+        let mut ctx = test_ctx(agent, "manage files");
+
+        // Add delegation chain with scope narrowed to "read_file" only.
+        ctx.delegation_chain = vec![DelegationLink {
+            from: Uuid::new_v4(),
+            to: ctx.agent.id,
+            scope_narrowing: vec!["read_file".into()],
+            created_at: Utc::now(),
+            expires_at: None,
+        }];
+
+        // read_file should be allowed (within scope).
+        let request_read = tool_call_request("read_file");
+        let decision = evaluate(&config, &ctx, &request_read);
+        assert!(
+            matches!(decision, Decision::Allow { .. }),
+            "in-scope tool should be allowed, got {decision:?}"
+        );
+
+        // write_file should be denied (outside narrowed scope).
+        let request_write = tool_call_request("write_file");
+        let decision = evaluate(&config, &ctx, &request_write);
+        assert!(
+            matches!(decision, Decision::Deny { ref reason } if reason.contains("delegation scope")),
+            "out-of-scope tool should be denied by delegation chain, got {decision:?}"
+        );
+    }
+
+    /// Empty delegation chain scope_narrowing should not block anything
+    /// (it's an empty filter, not a deny-all).
+    #[test]
+    fn empty_scope_narrowing_does_not_block() {
+        let config = PolicyConfig {
+            policies: vec![Policy {
+                id: "allow-all".into(),
+                agent_match: Default::default(),
+                principal_match: Default::default(),
+                intent_match: Default::default(),
+                allowed_tools: vec!["read_file".into()],
+                resource_match: vec![],
+                parameter_constraints: vec![],
+                effect: Effect::Allow,
+                disposition: Disposition::Block,
+                priority: 0,
+            }],
+        };
+
+        let agent = test_agent(TrustLevel::Trusted, vec!["read"]);
+        let mut ctx = test_ctx(agent, "read files");
+        ctx.delegation_chain = vec![DelegationLink {
+            from: Uuid::new_v4(),
+            to: ctx.agent.id,
+            scope_narrowing: vec![], // empty = no restriction
+            created_at: Utc::now(),
+            expires_at: None,
+        }];
+
+        let request = tool_call_request("read_file");
+        let decision = evaluate(&config, &ctx, &request);
+        assert!(
+            matches!(decision, Decision::Allow { .. }),
+            "empty scope_narrowing should not block, got {decision:?}"
         );
     }
 }

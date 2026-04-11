@@ -17,6 +17,7 @@ fn make_request(
         delegation_chain_snapshot: vec![],
         declared_intent: intent.to_string(),
         authorized_tools: tools,
+        authorized_credentials: vec![],
         time_limit,
         call_budget: budget,
         rate_limit_per_minute: None,
@@ -78,7 +79,7 @@ proptest! {
 
             // Use up the budget with valid calls.
             for i in 0..budget {
-                let result = store.use_session(session.session_id, "any_tool").await;
+                let result = store.use_session(session.session_id, "any_tool", None).await;
                 prop_assert!(
                     result.is_ok(),
                     "call {} of {} should succeed, got: {:?}", i + 1, budget, result
@@ -86,7 +87,7 @@ proptest! {
             }
 
             // The next call must fail with BudgetExceeded.
-            let result = store.use_session(session.session_id, "any_tool").await;
+            let result = store.use_session(session.session_id, "any_tool", None).await;
             prop_assert!(
                 matches!(result, Err(SessionError::BudgetExceeded { .. })),
                 "call {} should be BudgetExceeded, got: {:?}", budget + 1, result
@@ -120,11 +121,11 @@ proptest! {
             let session = store.create(req).await;
 
             // Allowed tool should succeed.
-            let result = store.use_session(session.session_id, &allowed_tool).await;
+            let result = store.use_session(session.session_id, &allowed_tool, None).await;
             prop_assert!(result.is_ok(), "allowed tool should succeed: {:?}", result);
 
             // Disallowed tool should be rejected.
-            let result = store.use_session(session.session_id, &disallowed_tool).await;
+            let result = store.use_session(session.session_id, &disallowed_tool, None).await;
             prop_assert!(
                 matches!(result, Err(SessionError::ToolNotAuthorized { .. })),
                 "disallowed tool '{}' should be rejected, got: {:?}", disallowed_tool, result
@@ -134,25 +135,26 @@ proptest! {
         })?;
     }
 
-    /// Session with zero duration is immediately expired after a brief delay.
+    /// Session with minimum duration expires after 1 second.
     #[test]
-    fn zero_duration_session_is_expired(intent in intent_strategy()) {
+    fn short_duration_session_is_expired(intent in intent_strategy()) {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
         rt.block_on(async {
             let store = SessionStore::new();
-            let req = make_request(&intent, vec![], 100, chrono::Duration::zero());
+            // Minimum duration is clamped to 1s; use that.
+            let req = make_request(&intent, vec![], 100, chrono::Duration::seconds(1));
             let session = store.create(req).await;
 
-            // Small delay to ensure clock advances past the zero-duration window.
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            // Wait for the session to expire.
+            tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
 
-            let result = store.use_session(session.session_id, "any_tool").await;
+            let result = store.use_session(session.session_id, "any_tool", None).await;
             prop_assert!(
                 matches!(result, Err(SessionError::Expired(_))),
-                "zero-duration session should be expired, got: {:?}", result
+                "expired session should return error, got: {:?}", result
             );
 
             Ok(())
@@ -173,6 +175,7 @@ proptest! {
             delegation_chain_snapshot: vec![],
             declared_intent: "test".into(),
             authorized_tools: vec![tool_a.clone()],
+            authorized_credentials: vec![],
             time_limit: chrono::Duration::hours(1),
             call_budget: 100,
             calls_made: 0,
@@ -205,6 +208,7 @@ proptest! {
             delegation_chain_snapshot: vec![],
             declared_intent: "test".into(),
             authorized_tools: vec![],
+            authorized_credentials: vec![],
             time_limit: chrono::Duration::hours(1),
             call_budget: 100,
             calls_made: 0,

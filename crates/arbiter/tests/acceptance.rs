@@ -674,8 +674,8 @@ async fn delegation_cascade_deactivation() {
         .register_agent("user:alice", &["read", "write"], "trusted")
         .await;
 
-    // Register child agent first
-    let (child_id, _) = h.register_agent("user:child", &["read"], "basic").await;
+    // Register child agent first (same owner -- cross-owner delegation is blocked)
+    let (child_id, _) = h.register_agent("user:alice", &["read"], "basic").await;
 
     // Delegate from parent to child (scope narrowing: only read)
     let resp = h
@@ -1319,8 +1319,10 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
         )
         .await;
 
-    // Generate 5+ anomalies by calling write_file in a read-intent session
-    // (escalate_anomalies=false set explicitly, so calls succeed but flag anomalies)
+    // Generate 5+ anomalies by calling write_file in a read-intent session.
+    // escalate_anomalies=false means individual anomalies are soft flags (200).
+    // But accumulated anomalies trigger trust demotion at the threshold, which
+    // now aborts the request that triggers the demotion (403).
     for i in 0..6 {
         let resp = h
             .mcp_call_with_id(
@@ -1331,10 +1333,16 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
                 i + 1,
             )
             .await;
+        let status = resp.status().as_u16();
+        if status == 403 {
+            // This is the call that triggered trust demotion -- expected after threshold.
+            tracing::info!(call = i + 1, "trust demotion triggered, request aborted as expected");
+            break;
+        }
         assert_eq!(
-            resp.status(),
+            status,
             200,
-            "soft-flag anomaly should still allow request (call {})",
+            "soft-flag anomaly should still allow request before demotion threshold (call {})",
             i + 1
         );
     }
@@ -2131,9 +2139,9 @@ async fn delegation_scope_narrowing_enforced() {
     // Parent has only ["read"] capability
     let (parent_id, _) = h.register_agent("user:alice", &["read"], "basic").await;
 
-    // Register a child agent
+    // Register a child agent (same owner -- cross-owner delegation is blocked)
     let (child_id, _) = h
-        .register_agent("user:child", &["read", "write"], "basic")
+        .register_agent("user:alice", &["read", "write"], "basic")
         .await;
 
     // Try to delegate with wider scope than parent's capabilities

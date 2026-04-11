@@ -55,6 +55,18 @@ pub struct ServerConfig {
     /// Listen port.
     #[serde(default = "default_listen_port")]
     pub listen_port: u16,
+    /// Maximum request/response body size in bytes. Default: 10 MB.
+    #[serde(default = "default_max_body_bytes")]
+    pub max_body_bytes: usize,
+    /// Timeout for upstream requests in seconds. Default: 30s.
+    #[serde(default = "default_upstream_timeout_secs")]
+    pub upstream_timeout_secs: u64,
+    /// Timeout for reading client request headers in seconds. Default: 10s.
+    #[serde(default = "default_header_read_timeout_secs")]
+    pub header_read_timeout_secs: u64,
+    /// Maximum number of concurrent connections. Default: 1024.
+    #[serde(default = "default_max_connections")]
+    pub max_connections: usize,
 }
 
 /// Upstream server to proxy requests to.
@@ -62,6 +74,26 @@ pub struct ServerConfig {
 pub struct UpstreamConfig {
     /// Full base URL of the upstream, e.g. "http://127.0.0.1:8081".
     pub url: String,
+}
+
+/// Default max body size: 10 MB.
+fn default_max_body_bytes() -> usize {
+    10 * 1024 * 1024
+}
+
+/// Default upstream request timeout: 30 seconds.
+fn default_upstream_timeout_secs() -> u64 {
+    30
+}
+
+/// Default connection header read timeout: 10 seconds.
+fn default_header_read_timeout_secs() -> u64 {
+    10
+}
+
+/// Default max concurrent connections: 1024.
+fn default_max_connections() -> usize {
+    1024
 }
 
 /// Configuration for the middleware pipeline.

@@ -2782,6 +2782,7 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
 
     // Trigger anomalies by calling write_file in a read-intent session.
     // The trust degradation threshold defaults to 5, so 5+ anomalies trigger demotion.
+    // The call that triggers demotion is aborted with 403.
     for i in 0..6 {
         let write_req = serde_json::json!({
             "jsonrpc": "2.0",
@@ -2799,10 +2800,15 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
             .send()
             .await
             .unwrap();
+        let status = resp.status().as_u16();
+        if status == 403 {
+            // Trust demotion triggered; request aborted as expected.
+            break;
+        }
         assert_eq!(
-            resp.status(),
+            status,
             200,
-            "write_file should succeed (soft flag, not escalated): call {}",
+            "write_file should succeed before demotion threshold (soft flag): call {}",
             i + 1
         );
     }

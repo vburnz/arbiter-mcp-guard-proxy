@@ -1,11 +1,16 @@
-use arbiter_lifecycle::AppState;
+use arbiter_lifecycle::{AppState, TokenConfig};
 use tokio::net::TcpListener;
 use tokio::process::Command;
 
 const API_KEY: &str = "test-cli-key";
 
 async fn spawn_server() -> String {
-    let state = AppState::new(API_KEY.into());
+    let token_config = TokenConfig {
+        signing_secret: "a]3Fz!9qL#mR&vXw2Tp7Ks@Yc0Nd8Ge$".into(),
+        expiry_seconds: 3600,
+        issuer: "arbiter".into(),
+    };
+    let state = AppState::with_token_config(API_KEY.into(), token_config);
     let app = arbiter_lifecycle::router(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

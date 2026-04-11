@@ -38,6 +38,7 @@ fn test_config() -> OAuthConfig {
             introspection_url: None,
             client_id: None,
             client_secret: None,
+            allowed_redirect_uris: vec![],
         }],
         jwks_cache_ttl_secs: 3600,
     }
@@ -224,9 +225,12 @@ fn unknown_kid_rejected() {
 
     let result = validator.validate_token(&token);
     assert!(result.is_err());
+    // The error Display no longer includes the kid value (prevents enumeration).
+    // Verify it's a KeyNotFound error without exposing the kid.
+    let err_msg = result.unwrap_err().to_string();
     assert!(
-        result.unwrap_err().to_string().contains("unknown-kid"),
-        "error should reference the unknown kid"
+        err_msg.contains("no matching key found"),
+        "error should indicate key not found without exposing kid, got: {err_msg}"
     );
 }
 
@@ -262,6 +266,7 @@ fn multi_issuer_selects_correct_one() {
                 introspection_url: None,
                 client_id: None,
                 client_secret: None,
+            allowed_redirect_uris: vec![],
             },
             IssuerConfig {
                 name: "issuer-2".to_string(),
@@ -271,6 +276,7 @@ fn multi_issuer_selects_correct_one() {
                 introspection_url: None,
                 client_id: None,
                 client_secret: None,
+            allowed_redirect_uris: vec![],
             },
         ],
         jwks_cache_ttl_secs: 3600,
@@ -479,9 +485,10 @@ async fn validate_with_refresh_key_not_found_without_jwks_endpoint() {
     );
     let err = result.unwrap_err();
     // After failed refresh, the retry still won't find the key.
+    // Error Display no longer includes the kid value (prevents enumeration).
     assert!(
-        err.to_string().contains("nonexistent-kid"),
-        "error should reference the missing kid: {err}"
+        err.to_string().contains("no matching key found"),
+        "error should indicate key not found without exposing kid: {err}"
     );
 }
 
@@ -605,6 +612,7 @@ fn empty_audiences_skips_validation() {
             introspection_url: None,
             client_id: None,
             client_secret: None,
+            allowed_redirect_uris: vec![],
         }],
         jwks_cache_ttl_secs: 3600,
     };
@@ -746,6 +754,7 @@ fn config_url_validation_https_required() {
             introspection_url: None,
             client_id: None,
             client_secret: None,
+            allowed_redirect_uris: vec![],
         }],
         jwks_cache_ttl_secs: 3600,
     };
@@ -780,6 +789,7 @@ fn config_url_validation_localhost_allowed() {
             introspection_url: None,
             client_id: None,
             client_secret: None,
+            allowed_redirect_uris: vec![],
         }],
         jwks_cache_ttl_secs: 3600,
     };

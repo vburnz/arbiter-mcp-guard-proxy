@@ -30,9 +30,62 @@ pub struct Claims {
     #[serde(default)]
     pub iat: Option<u64>,
 
+    /// OAuth scopes granted to this token (space-delimited string or array).
+    /// Extracted from the `scope` claim if present. If absent, defaults to empty.
+    #[serde(default, deserialize_with = "deserialize_scope")]
+    pub scope: Vec<String>,
+
     /// Any additional claims not covered by the standard fields above.
     #[serde(flatten)]
     pub custom: HashMap<String, serde_json::Value>,
+}
+
+impl Claims {
+    /// Check whether this token has a specific scope.
+    pub fn has_scope(&self, required: &str) -> bool {
+        self.scope.iter().any(|s| s == required)
+    }
+}
+
+/// Deserialize the `scope` claim which may be a space-delimited string
+/// (RFC 6749) or an array of strings.
+fn deserialize_scope<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+
+    struct ScopeVisitor;
+
+    impl<'de> de::Visitor<'de> for ScopeVisitor {
+        type Value = Vec<String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a space-delimited string or array of strings")
+        }
+
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+            Ok(v.split_whitespace().map(String::from).collect())
+        }
+
+        fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut scopes = Vec::new();
+            while let Some(s) = seq.next_element::<String>()? {
+                scopes.push(s);
+            }
+            Ok(scopes)
+        }
+
+        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(Vec::new())
+        }
+
+        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(Vec::new())
+        }
+    }
+
+    deserializer.deserialize_any(ScopeVisitor)
 }
 
 /// JWT audience: may be a single string or an array of strings.

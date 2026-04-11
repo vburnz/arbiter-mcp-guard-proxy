@@ -21,15 +21,28 @@ impl AnySessionStore {
         }
     }
 
+    /// Atomically check per-agent session cap and create if under the limit.
+    pub async fn create_if_under_cap(
+        &self,
+        req: CreateSessionRequest,
+        max_sessions: u64,
+    ) -> Result<TaskSession, crate::error::SessionError> {
+        match self {
+            AnySessionStore::InMemory(s) => s.create_if_under_cap(req, max_sessions).await,
+            AnySessionStore::StorageBacked(s) => s.create_if_under_cap(req, max_sessions).await,
+        }
+    }
+
     /// Record a tool call against the session.
     pub async fn use_session(
         &self,
         session_id: SessionId,
         tool_name: &str,
+        requesting_agent_id: Option<uuid::Uuid>,
     ) -> Result<TaskSession, SessionError> {
         match self {
-            AnySessionStore::InMemory(s) => s.use_session(session_id, tool_name).await,
-            AnySessionStore::StorageBacked(s) => s.use_session(session_id, tool_name).await,
+            AnySessionStore::InMemory(s) => s.use_session(session_id, tool_name, requesting_agent_id).await,
+            AnySessionStore::StorageBacked(s) => s.use_session(session_id, tool_name, requesting_agent_id).await,
         }
     }
 
@@ -42,10 +55,11 @@ impl AnySessionStore {
         &self,
         session_id: SessionId,
         tool_names: &[&str],
+        requesting_agent_id: Option<uuid::Uuid>,
     ) -> Result<TaskSession, SessionError> {
         match self {
-            AnySessionStore::InMemory(s) => s.use_session_batch(session_id, tool_names).await,
-            AnySessionStore::StorageBacked(s) => s.use_session_batch(session_id, tool_names).await,
+            AnySessionStore::InMemory(s) => s.use_session_batch(session_id, tool_names, requesting_agent_id).await,
+            AnySessionStore::StorageBacked(s) => s.use_session_batch(session_id, tool_names, requesting_agent_id).await,
         }
     }
 
@@ -116,6 +130,7 @@ mod tests {
             delegation_chain_snapshot: vec![],
             declared_intent: "test intent".into(),
             authorized_tools: vec!["read_file".into()],
+            authorized_credentials: vec![],
             time_limit: chrono::Duration::hours(1),
             call_budget: 10,
             rate_limit_per_minute: None,
@@ -130,7 +145,7 @@ mod tests {
 
         // Use.
         let updated = store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
         assert_eq!(updated.calls_made, 1);
@@ -153,7 +168,7 @@ mod tests {
         assert_eq!(closed.status, crate::model::SessionStatus::Closed);
 
         // Use after close should fail.
-        let err = store.use_session(session.session_id, "read_file").await;
+        let err = store.use_session(session.session_id, "read_file", None).await;
         assert!(matches!(err, Err(SessionError::AlreadyClosed(_))));
     }
 }

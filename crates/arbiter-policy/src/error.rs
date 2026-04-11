@@ -29,4 +29,7 @@ pub enum PolicyError {
         length: usize,
         max: usize,
     },
+
+    #[error("duplicate policy ID '{policy_id}'")]
+    DuplicatePolicyId { policy_id: String },
 }

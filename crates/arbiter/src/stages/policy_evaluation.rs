@@ -31,9 +31,18 @@ pub async fn build_eval_context(
             expires_at: None,
             active: true,
         });
+    // Populate delegation_chain from session snapshot.
+    // The session's delegation_chain_snapshot stores serialized DelegationLink entries.
+    // If deserialization fails, fall back to empty chain (backward compatible).
+    let delegation_chain: Vec<arbiter_identity::DelegationLink> = session
+        .delegation_chain_snapshot
+        .iter()
+        .filter_map(|s| serde_json::from_str(s).ok())
+        .collect();
+
     EvalContext {
         agent,
-        delegation_chain: vec![],
+        delegation_chain,
         declared_intent: session.declared_intent.clone(),
         principal_sub: principal,
         principal_groups: vec![],
@@ -207,6 +216,7 @@ keywords = ["read"]
             delegation_chain_snapshot: vec![],
             declared_intent: "read files".into(),
             authorized_tools: vec![],
+            authorized_credentials: vec![],
             time_limit: chrono::Duration::hours(1),
             call_budget: 100,
             calls_made: 0,
@@ -247,6 +257,7 @@ keywords = ["read"]
             delegation_chain_snapshot: vec![],
             declared_intent: "read logs".into(),
             authorized_tools: vec![],
+            authorized_credentials: vec![],
             time_limit: chrono::Duration::hours(1),
             call_budget: 100,
             calls_made: 0,

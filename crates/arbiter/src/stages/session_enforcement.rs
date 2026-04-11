@@ -15,6 +15,7 @@ use crate::handler::ArbiterError;
 pub async fn validate_session_tools(
     store: &AnySessionStore,
     session_id: uuid::Uuid,
+    requesting_agent_id: Option<uuid::Uuid>,
     requests: &[arbiter_mcp::context::McpRequest],
 ) -> StageVerdict {
     let tool_names: Vec<&str> = requests
@@ -22,7 +23,7 @@ pub async fn validate_session_tools(
         .map(|req| req.tool_name.as_deref().unwrap_or(&req.method))
         .collect();
 
-    match store.use_session_batch(session_id, &tool_names).await {
+    match store.use_session_batch(session_id, &tool_names, requesting_agent_id).await {
         Ok(_) => {
             tracing::debug!(
                 %session_id,
@@ -70,6 +71,7 @@ mod tests {
                 delegation_chain_snapshot: vec![],
                 declared_intent: "read files".into(),
                 authorized_tools: vec!["read_file".into()],
+            authorized_credentials: vec![],
                 time_limit: chrono::Duration::hours(1),
                 call_budget: 100,
                 rate_limit_per_minute: None,
@@ -80,7 +82,7 @@ mod tests {
 
         let store = AnySessionStore::InMemory(inner);
         let requests = vec![mcp_tool_call("read_file")];
-        let verdict = validate_session_tools(&store, session.session_id, &requests).await;
+        let verdict = validate_session_tools(&store, session.session_id, None, &requests).await;
         assert!(matches!(verdict, StageVerdict::Continue));
     }
 
@@ -93,6 +95,7 @@ mod tests {
                 delegation_chain_snapshot: vec![],
                 declared_intent: "read files".into(),
                 authorized_tools: vec!["read_file".into()],
+            authorized_credentials: vec![],
                 time_limit: chrono::Duration::hours(1),
                 call_budget: 100,
                 rate_limit_per_minute: None,
@@ -103,7 +106,7 @@ mod tests {
 
         let store = AnySessionStore::InMemory(inner);
         let requests = vec![mcp_tool_call("delete_file")];
-        let verdict = validate_session_tools(&store, session.session_id, &requests).await;
+        let verdict = validate_session_tools(&store, session.session_id, None, &requests).await;
         assert!(matches!(verdict, StageVerdict::Deny { .. }));
     }
 }

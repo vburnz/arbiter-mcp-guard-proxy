@@ -1,11 +1,19 @@
-use arbiter_lifecycle::AppState;
+use arbiter_lifecycle::{AppState, TokenConfig};
 use arbiter_policy::PolicyConfig;
 use tokio::net::TcpListener;
 
 const API_KEY: &str = "test-admin-key";
 
+fn test_token_config() -> TokenConfig {
+    TokenConfig {
+        signing_secret: "a]3Fz!9qL#mR&vXw2Tp7Ks@Yc0Nd8Ge$".into(),
+        expiry_seconds: 3600,
+        issuer: "arbiter".into(),
+    }
+}
+
 async fn spawn_server() -> String {
-    let state = AppState::new(API_KEY.into());
+    let state = AppState::with_token_config(API_KEY.into(), test_token_config());
     let app = arbiter_lifecycle::router(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -16,7 +24,7 @@ async fn spawn_server() -> String {
 }
 
 async fn spawn_server_with_policy(policy_toml: &str) -> String {
-    let state = AppState::new(API_KEY.into());
+    let state = AppState::with_token_config(API_KEY.into(), test_token_config());
     let _ = state.policy_config.send_replace(std::sync::Arc::new(Some(
         PolicyConfig::from_toml(policy_toml).unwrap(),
     )));

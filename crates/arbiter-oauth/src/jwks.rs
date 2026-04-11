@@ -113,7 +113,17 @@ impl JwksCache {
         tracing::info!(key_count = new_keys.len(), "refreshed JWKS cache");
 
         let mut cache = self.inner.write().unwrap_or_else(|e| e.into_inner());
-        cache.keys = new_keys;
+        // Only replace if the new set is non-empty. An empty JWKS response
+        // (e.g., all keys had unrecognized algorithms) would wipe the cache,
+        // causing all requests to fail until the next refresh.
+        if new_keys.is_empty() && !cache.keys.is_empty() {
+            tracing::error!(
+                "JWKS refresh returned 0 usable keys; retaining {} existing keys",
+                cache.keys.len()
+            );
+        } else {
+            cache.keys = new_keys;
+        }
         cache.last_refresh = Some(Instant::now());
 
         Ok(())

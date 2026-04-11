@@ -1,6 +1,8 @@
 use chrono::{Duration, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Mutex;
 use uuid::Uuid;
 
 /// Claims embedded in agent short-lived JWTs.
@@ -32,9 +34,11 @@ pub struct TokenConfig {
 }
 
 impl Default for TokenConfig {
+    /// Default config with an empty signing secret that will be rejected by issue_token.
+    /// Operators MUST provide a real secret via configuration.
     fn default() -> Self {
         Self {
-            signing_secret: "arbiter-dev-secret-change-in-production".into(),
+            signing_secret: String::new(),
             expiry_seconds: 3600,
             issuer: "arbiter".into(),
         }
@@ -95,14 +99,90 @@ pub fn issue_token(
     )
 }
 
+/// In-memory JTI blocklist for token revocation.
+///
+/// Stores revoked JTI values with their expiry time so they can be
+/// cleaned up once the token would have expired anyway.
+pub struct JtiBlocklist {
+    /// Map of JTI -> expiry timestamp. Entries are removed after expiry.
+    revoked: Mutex<HashMap<String, i64>>,
+}
+
+impl JtiBlocklist {
+    /// Create a new empty blocklist.
+    pub fn new() -> Self {
+        Self {
+            revoked: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Revoke a token by its JTI. The `exp` is the token's expiry time;
+    /// the entry will be auto-cleaned after that time.
+    pub fn revoke(&self, jti: &str, exp: i64) {
+        let mut map = self.revoked.lock().unwrap_or_else(|e| e.into_inner());
+        map.insert(jti.to_string(), exp);
+        tracing::info!(jti, "token revoked via JTI blocklist");
+    }
+
+    /// Check if a JTI has been revoked.
+    pub fn is_revoked(&self, jti: &str) -> bool {
+        let map = self.revoked.lock().unwrap_or_else(|e| e.into_inner());
+        map.contains_key(jti)
+    }
+
+    /// Remove expired entries from the blocklist.
+    pub fn cleanup(&self) {
+        let now = Utc::now().timestamp();
+        let mut map = self.revoked.lock().unwrap_or_else(|e| e.into_inner());
+        let before = map.len();
+        map.retain(|_, exp| *exp > now);
+        let removed = before - map.len();
+        if removed > 0 {
+            tracing::debug!(removed, "cleaned up expired JTI blocklist entries");
+        }
+    }
+
+    /// Number of currently revoked JTIs.
+    pub fn len(&self) -> usize {
+        self.revoked.lock().unwrap_or_else(|e| e.into_inner()).len()
+    }
+
+    /// Whether the blocklist is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl Default for JtiBlocklist {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use jsonwebtoken::{DecodingKey, Validation, decode};
 
+    fn test_config() -> TokenConfig {
+        TokenConfig {
+            signing_secret: "a]3Fz!9qL#mR&vXw2Tp7Ks@Yc0Nd8Ge$".into(),
+            expiry_seconds: 3600,
+            issuer: "arbiter".into(),
+        }
+    }
+
+    #[test]
+    fn default_config_rejects_token_issuance() {
+        let config = TokenConfig::default();
+        let agent_id = Uuid::new_v4();
+        let result = issue_token(agent_id, "user:alice", &config);
+        assert!(result.is_err(), "default config with empty secret must reject token issuance");
+    }
+
     #[test]
     fn issue_and_decode_token() {
-        let config = TokenConfig::default();
+        let config = test_config();
         let agent_id = Uuid::new_v4();
         let token = issue_token(agent_id, "user:alice", &config).unwrap();
 
@@ -153,7 +233,7 @@ mod tests {
     #[test]
     fn expiry_capped_at_24_hours() {
         let config = TokenConfig {
-            signing_secret: "arbiter-dev-secret-change-in-production".into(),
+            signing_secret: "a]3Fz!9qL#mR&vXw2Tp7Ks@Yc0Nd8Ge$".into(),
             expiry_seconds: 172_800, // 48 hours — should be capped to 24h
             issuer: "arbiter".into(),
         };
@@ -183,7 +263,7 @@ mod tests {
     #[test]
     fn normal_expiry_not_capped() {
         let config = TokenConfig {
-            signing_secret: "arbiter-dev-secret-change-in-production".into(),
+            signing_secret: "a]3Fz!9qL#mR&vXw2Tp7Ks@Yc0Nd8Ge$".into(),
             expiry_seconds: 3600,
             issuer: "arbiter".into(),
         };
@@ -209,7 +289,7 @@ mod tests {
     /// Each issued token must carry a unique jti for revocation tracking.
     #[test]
     fn each_token_has_unique_jti() {
-        let config = TokenConfig::default();
+        let config = test_config();
         let agent_id = Uuid::new_v4();
 
         let token_a = issue_token(agent_id, "user:alice", &config).unwrap();

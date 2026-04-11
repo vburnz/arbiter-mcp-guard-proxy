@@ -59,6 +59,11 @@ impl PolicyWatcher {
             .to_path_buf();
         watcher.watch(&watch_dir, RecursiveMode::NonRecursive)?;
 
+        // Perform an initial synchronous load so the shared config is never
+        // None after construction. Previously, there was a window between
+        // watcher start and first filesystem event where the config was None.
+        reload_from_file(&path, &shared);
+
         let handle = tokio::spawn(Self::reload_loop(path, shared, debounce, rx));
 
         Ok(Self {

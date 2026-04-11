@@ -18,6 +18,8 @@ pub fn status_code_for_error(err: &SessionError) -> u16 {
         SessionError::AlreadyClosed(_) => 410,
         SessionError::RateLimited { .. } => 429,
         SessionError::TooManySessions { .. } => 429,
+        SessionError::AgentMismatch { .. } => 403,
+        SessionError::StorageWriteThrough { .. } => 503,
     }
 }
 
