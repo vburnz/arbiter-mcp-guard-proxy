@@ -41,13 +41,19 @@ pub struct IntrospectionResponse {
 ///
 /// Returns [`Claims`] on success, or an error if the endpoint is not
 /// configured, unreachable, or reports the token as inactive.
+/// Introspection client timeout (matches JWKS fetch timeout).
+const INTROSPECTION_TIMEOUT_SECS: u64 = 30;
+
 pub async fn introspect_token(token: &str, issuer: &IssuerConfig) -> Result<Claims, OAuthError> {
     let url = issuer
         .introspection_url
         .as_ref()
         .ok_or_else(|| OAuthError::IntrospectionFailed("no introspection URL configured".into()))?;
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(INTROSPECTION_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| OAuthError::IntrospectionFailed(e.to_string()))?;
     let mut req = client
         .post(url)
         .form(&[("token", token), ("token_type_hint", "access_token")]);
@@ -70,12 +76,58 @@ pub async fn introspect_token(token: &str, issuer: &IssuerConfig) -> Result<Clai
         return Err(OAuthError::TokenNotActive);
     }
 
+    // Re-validate issuer against configured value (don't trust the introspection
+    // endpoint blindly -- a compromised endpoint could return arbitrary claims).
+    if let Some(ref returned_iss) = body.iss {
+        if returned_iss != &issuer.issuer_url {
+            tracing::warn!(
+                expected = %issuer.issuer_url,
+                actual = %returned_iss,
+                "introspection response issuer does not match configured issuer"
+            );
+            return Err(OAuthError::IntrospectionFailed(
+                "issuer mismatch in introspection response".into(),
+            ));
+        }
+    }
+
+    // Re-validate audience if the issuer has configured audiences.
+    if !issuer.audiences.is_empty() {
+        if let Some(ref returned_aud) = body.aud {
+            if !issuer.audiences.contains(returned_aud) {
+                tracing::warn!(
+                    expected = ?issuer.audiences,
+                    actual = %returned_aud,
+                    "introspection response audience not in configured set"
+                );
+                return Err(OAuthError::IntrospectionFailed(
+                    "audience mismatch in introspection response".into(),
+                ));
+            }
+        }
+    }
+
+    // Re-validate expiry against current time.
+    if let Some(exp) = body.exp {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        if exp < now {
+            tracing::warn!(exp, now, "introspection returned active token with past expiry");
+            return Err(OAuthError::IntrospectionFailed(
+                "token expired per introspection response exp claim".into(),
+            ));
+        }
+    }
+
     Ok(Claims {
         sub: body.sub,
         iss: body.iss,
-        aud: None,
+        aud: body.aud.map(crate::claims::Audience::Single),
         exp: body.exp,
         iat: body.iat,
+        scope: Vec::new(),
         custom: Default::default(),
     })
 }

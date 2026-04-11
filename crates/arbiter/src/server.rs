@@ -52,10 +52,9 @@ pub async fn run(config: Arc<ArbiterConfig>) -> anyhow::Result<()> {
     };
 
     // Build policy config from inline policies or policy file.
-    // Uses a watch channel for lock-free reads on the hot path (proxy handler).
-    // Writers (admin API reload, file watcher) send through the Sender; the
-    // handler snapshots via Receiver::borrow(). No contention, no async lock.
-    let policy_config = build_policy_config(&config.policy);
+    // Policy load failure is a startup-blocking error when a file is configured.
+    // The gateway must never serve traffic with a misconfigured authorization policy.
+    let policy_config = build_policy_config(&config.policy)?;
     let (policy_tx, policy_rx) = tokio::sync::watch::channel(Arc::new(policy_config));
     let shared_policy = Arc::new(policy_tx);
 
@@ -189,8 +188,10 @@ pub async fn run(config: Arc<ArbiterConfig>) -> anyhow::Result<()> {
     });
 
     // Run proxy with full middleware chain.
+    // Use a JoinSet to track in-flight connections for graceful shutdown.
     let shutdown = shutdown_signal();
     tokio::pin!(shutdown);
+    let mut connections = tokio::task::JoinSet::new();
 
     loop {
         tokio::select! {
@@ -199,7 +200,7 @@ pub async fn run(config: Arc<ArbiterConfig>) -> anyhow::Result<()> {
                 let state = Arc::clone(&arbiter_state);
                 tracing::debug!(%remote_addr, "accepted connection");
 
-                tokio::spawn(async move {
+                connections.spawn(async move {
                     let io = TokioIo::new(stream);
                     let svc = service_fn(move |req| {
                         let state = Arc::clone(&state);
@@ -214,37 +215,47 @@ pub async fn run(config: Arc<ArbiterConfig>) -> anyhow::Result<()> {
                 });
             }
             _ = &mut shutdown => {
-                tracing::info!("shutdown signal received, stopping");
+                tracing::info!("shutdown signal received, draining in-flight connections");
+                // Stop accepting new connections, wait for in-flight to finish.
+                let inflight = connections.len();
+                if inflight > 0 {
+                    tracing::info!(inflight, "waiting for in-flight requests to complete");
+                    // Give connections a grace period to finish.
+                    let drain = async {
+                        while connections.join_next().await.is_some() {}
+                    };
+                    match tokio::time::timeout(std::time::Duration::from_secs(30), drain).await {
+                        Ok(()) => tracing::info!("all in-flight connections drained"),
+                        Err(_) => tracing::warn!("drain timeout; aborting remaining connections"),
+                    }
+                }
                 admin_handle.abort();
                 cleanup_handle.abort();
                 break;
             }
         }
+        // Clean up completed connection tasks to prevent unbounded growth.
+        while connections.try_join_next().is_some() {}
     }
 
     Ok(())
 }
 
 /// Build a [`PolicyConfig`] from the arbiter policy config section.
+///
+/// Returns an error if a policy file is configured but cannot be read/parsed,
+/// blocking startup. The gateway must not serve traffic with a broken policy.
 fn build_policy_config(
     config: &crate::config::PolicySection,
-) -> Option<arbiter_policy::PolicyConfig> {
+) -> anyhow::Result<Option<arbiter_policy::PolicyConfig>> {
     // Load from file if specified.
     if let Some(ref path) = config.file {
-        match std::fs::read_to_string(path) {
-            Ok(contents) => match arbiter_policy::PolicyConfig::from_toml(&contents) {
-                Ok(pc) => {
-                    tracing::info!(path, policies = pc.policies.len(), "loaded policy file");
-                    return Some(pc);
-                }
-                Err(e) => {
-                    tracing::error!(path, error = %e, "failed to parse policy file");
-                }
-            },
-            Err(e) => {
-                tracing::error!(path, error = %e, "failed to read policy file");
-            }
-        }
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("failed to read policy file '{}': {e}", path))?;
+        let pc = arbiter_policy::PolicyConfig::from_toml(&contents)
+            .map_err(|e| anyhow::anyhow!("failed to parse policy file '{}': {e}", path))?;
+        tracing::info!(path, policies = pc.policies.len(), "loaded policy file");
+        return Ok(Some(pc));
     }
 
     // Use inline policies if any.
@@ -252,14 +263,13 @@ fn build_policy_config(
         let mut pc = arbiter_policy::PolicyConfig {
             policies: config.policies.clone(),
         };
-        if let Err(e) = pc.compile() {
-            tracing::error!(error = %e, "failed to compile inline policy regexes");
-        }
+        pc.compile()
+            .map_err(|e| anyhow::anyhow!("failed to compile inline policy regexes: {e}"))?;
         tracing::info!(policies = pc.policies.len(), "loaded inline policies");
-        return Some(pc);
+        return Ok(Some(pc));
     }
 
-    None
+    Ok(None)
 }
 
 /// Build an [`AuditSink`] and [`RedactionConfig`] from the arbiter audit config.
@@ -279,6 +289,7 @@ fn build_audit(config: &crate::config::AuditSection) -> (Option<Arc<AuditSink>>,
     let sink_config = AuditSinkConfig {
         write_stdout: true,
         file_path: config.file_path.as_ref().map(std::path::PathBuf::from),
+        ..Default::default()
     };
     let sink = Arc::new(AuditSink::new(sink_config));
 

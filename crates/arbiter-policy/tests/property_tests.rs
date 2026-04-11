@@ -48,6 +48,7 @@ fn allow_all_policy() -> Policy {
         principal_match: PrincipalMatch::default(),
         intent_match: IntentMatch::default(),
         allowed_tools: vec![],
+        resource_match: vec![],
         parameter_constraints: vec![],
         effect: Effect::Allow,
         disposition: Disposition::Block,
@@ -153,6 +154,7 @@ proptest! {
             principal_match: PrincipalMatch::default(),
             intent_match: IntentMatch::default(),
             allowed_tools: vec![tool_name.into()],
+            resource_match: vec![],
             parameter_constraints: vec![ParameterConstraint {
                 key: "max_tokens".into(),
                 max_value: Some(max_val),
@@ -206,6 +208,7 @@ proptest! {
             principal_match: PrincipalMatch::default(),
             intent_match: IntentMatch::default(),
             allowed_tools: vec![tool_name.into()],
+            resource_match: vec![],
             parameter_constraints: vec![ParameterConstraint {
                 key: "max_tokens".into(),
                 max_value: Some(max_val),
@@ -258,6 +261,7 @@ proptest! {
             principal_match: PrincipalMatch::default(),
             intent_match: IntentMatch::default(),
             allowed_tools: vec![tool_name.into()],
+            resource_match: vec![],
             parameter_constraints: vec![ParameterConstraint {
                 key: "value".into(),
                 max_value: Some(max_val),

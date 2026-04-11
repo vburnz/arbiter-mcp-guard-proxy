@@ -37,7 +37,8 @@ impl SqliteStorage {
             .map_err(|e| StorageError::Connection(e.to_string()))?
             .create_if_missing(true)
             .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
-            .synchronous(sqlx::sqlite::SqliteSynchronous::Normal);
+            .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+            .pragma("foreign_keys", "ON");
 
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
@@ -48,7 +49,16 @@ impl SqliteStorage {
         // Run embedded migrations.
         sqlx::migrate!("./migrations").run(&pool).await?;
 
-        tracing::info!(database_url, "sqlite storage initialized with WAL mode");
+        // Warn if using a non-memory database without encryption.
+        let is_memory = database_url.contains(":memory:") || database_url == "sqlite::memory:";
+        if !is_memory {
+            tracing::warn!(
+                "sqlite storage initialized WITHOUT field-level encryption. \
+                 Set ARBITER_STORAGE_ENCRYPTION_KEY or call with_encryptor() \
+                 to encrypt sensitive session columns at rest."
+            );
+        }
+        tracing::info!("sqlite storage initialized with WAL mode and foreign key enforcement");
 
         Ok(Self {
             pool,

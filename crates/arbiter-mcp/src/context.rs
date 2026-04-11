@@ -36,7 +36,51 @@ pub struct McpRequest {
     pub resource_uri: Option<String>,
 }
 
+impl McpRequest {
+    /// Reconstruct a valid JSON-RPC 2.0 request from the parsed fields.
+    pub fn to_jsonrpc(&self) -> serde_json::Value {
+        let mut obj = serde_json::Map::new();
+        obj.insert("jsonrpc".into(), serde_json::Value::String("2.0".into()));
+        if let Some(ref id) = self.id {
+            obj.insert("id".into(), id.clone());
+        }
+        obj.insert("method".into(), serde_json::Value::String(self.method.clone()));
+
+        let mut params = serde_json::Map::new();
+        if let Some(ref name) = self.tool_name {
+            params.insert("name".into(), serde_json::Value::String(name.clone()));
+        }
+        if let Some(ref args) = self.arguments {
+            params.insert("arguments".into(), args.clone());
+        }
+        if let Some(ref uri) = self.resource_uri {
+            params.insert("uri".into(), serde_json::Value::String(uri.clone()));
+        }
+        if !params.is_empty() {
+            obj.insert("params".into(), serde_json::Value::Object(params));
+        }
+        serde_json::Value::Object(obj)
+    }
+}
+
 impl McpContext {
+    /// Reconstruct a canonical JSON body from the parsed MCP requests.
+    /// This eliminates parser differentials (duplicate keys, encoding tricks)
+    /// by rebuilding the JSON-RPC envelope from the extracted, validated fields.
+    pub fn to_canonical_body(&self) -> Vec<u8> {
+        if self.requests.len() == 1 {
+            serde_json::to_vec(&self.requests[0].to_jsonrpc())
+                .unwrap_or_default()
+        } else {
+            let batch: Vec<serde_json::Value> = self
+                .requests
+                .iter()
+                .map(|r| r.to_jsonrpc())
+                .collect();
+            serde_json::to_vec(&batch).unwrap_or_default()
+        }
+    }
+
     /// Returns `true` if any request in this context is a tool call.
     pub fn has_tool_calls(&self) -> bool {
         self.requests.iter().any(|r| r.tool_name.is_some())

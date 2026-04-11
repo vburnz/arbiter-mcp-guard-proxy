@@ -127,24 +127,29 @@ impl ArbiterMetrics {
     }
 
     /// Record a request with the given authorization decision.
+    ///
+    /// Decision labels are restricted to a closed allowlist to prevent
+    /// unbounded cardinality from arbitrary caller-supplied strings.
     pub fn record_request(&self, decision: &str) {
-        // Sanitize decision label.
-        let sanitized: String = decision
-            .chars()
-            .take(64)
-            .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
-            .collect();
-        self.requests_total.with_label_values(&[&sanitized]).inc();
+        let label = match decision {
+            "allow" | "deny" | "escalate" | "error" => decision,
+            _ => "__unknown__",
+        };
+        self.requests_total.with_label_values(&[label]).inc();
     }
 
     /// Record a tool call for the given tool name.
+    ///
+    /// Tool name labels are sanitized to strict alphanumeric + underscore + '/'
+    /// to prevent Prometheus text format injection and PII leakage via metric
+    /// label values. The label is also truncated to 64 chars (shorter than
+    /// before) to reduce the risk of embedding identifiers.
     pub fn record_tool_call(&self, tool: &str) {
-        // Sanitize and limit metric label cardinality.
         let sanitized: String = tool
             .chars()
-            .take(128)
+            .take(64)
             .map(|c| {
-                if c.is_ascii_graphic() || c == ' ' {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '/' {
                     c
                 } else {
                     '_'
@@ -153,7 +158,10 @@ impl ArbiterMetrics {
             .collect();
 
         let label = {
-            let mut known = self.known_tools.lock().unwrap_or_else(|e| e.into_inner());
+            let mut known = self.known_tools.lock().unwrap_or_else(|e| {
+                tracing::error!("known_tools mutex poisoned, recovering");
+                e.into_inner()
+            });
             if known.contains(&sanitized) || known.len() < MAX_TOOL_LABEL_CARDINALITY {
                 known.insert(sanitized.clone());
                 sanitized
@@ -170,13 +178,27 @@ impl ArbiterMetrics {
     }
 
     /// Observe a request duration in seconds.
+    /// Clamps negative or non-finite values to 0.0 to prevent histogram corruption.
     pub fn observe_request_duration(&self, seconds: f64) {
-        self.request_duration_seconds.observe(seconds);
+        let clamped = if seconds.is_finite() && seconds >= 0.0 {
+            seconds
+        } else {
+            tracing::warn!(raw = seconds, "clamping invalid request duration to 0.0");
+            0.0
+        };
+        self.request_duration_seconds.observe(clamped);
     }
 
     /// Observe an upstream call duration in seconds.
+    /// Clamps negative or non-finite values to 0.0 to prevent histogram corruption.
     pub fn observe_upstream_duration(&self, seconds: f64) {
-        self.upstream_duration_seconds.observe(seconds);
+        let clamped = if seconds.is_finite() && seconds >= 0.0 {
+            seconds
+        } else {
+            tracing::warn!(raw = seconds, "clamping invalid upstream duration to 0.0");
+            0.0
+        };
+        self.upstream_duration_seconds.observe(clamped);
     }
 
     /// Render all metrics in the Prometheus text exposition format.
@@ -185,7 +207,10 @@ impl ArbiterMetrics {
         let metric_families = self.registry.gather();
         let mut buffer = Vec::new();
         encoder.encode(&metric_families, &mut buffer)?;
-        Ok(String::from_utf8_lossy(&buffer).into_owned())
+        String::from_utf8(buffer)
+            .map_err(|e| MetricsError::Prometheus(prometheus::Error::Msg(
+                format!("metrics encoding produced invalid UTF-8: {e}")
+            )))
     }
 }
 
@@ -335,6 +360,59 @@ mod tests {
         assert_eq!(
             first_count, 2,
             "repeated calls to known tools should still use original label"
+        );
+    }
+
+    /// Decision labels must be restricted to the closed allowlist.
+    /// Arbitrary strings go to __unknown__.
+    #[test]
+    fn decision_label_allowlist() {
+        let metrics = ArbiterMetrics::new().unwrap();
+        metrics.record_request("allow");
+        metrics.record_request("deny");
+        metrics.record_request("escalate");
+        metrics.record_request("error");
+        metrics.record_request("something_unexpected");
+        metrics.record_request("");
+
+        assert_eq!(metrics.requests_total.with_label_values(&["allow"]).get(), 1);
+        assert_eq!(metrics.requests_total.with_label_values(&["deny"]).get(), 1);
+        assert_eq!(metrics.requests_total.with_label_values(&["escalate"]).get(), 1);
+        assert_eq!(metrics.requests_total.with_label_values(&["error"]).get(), 1);
+        assert_eq!(
+            metrics.requests_total.with_label_values(&["__unknown__"]).get(), 2,
+            "unexpected decision values must be bucketed under __unknown__"
+        );
+    }
+
+    /// Tool labels must sanitize special characters that could break Prometheus format.
+    #[test]
+    fn tool_label_sanitizes_special_chars() {
+        let metrics = ArbiterMetrics::new().unwrap();
+        // Prometheus-special chars should be replaced with underscore
+        metrics.record_tool_call("tool{job=\"arbiter\"}");
+        // The sanitized label should not contain { } " =
+        let output = metrics.render().unwrap();
+        assert!(
+            !output.contains("tool{job"),
+            "special chars in tool labels must be sanitized, got: {output}"
+        );
+    }
+
+    /// Negative or NaN durations should be clamped to 0.0, not corrupt the histogram.
+    #[test]
+    fn histogram_rejects_invalid_values() {
+        let metrics = ArbiterMetrics::new().unwrap();
+        metrics.observe_request_duration(-1.0);
+        metrics.observe_request_duration(f64::NAN);
+        metrics.observe_request_duration(f64::INFINITY);
+        metrics.observe_upstream_duration(-0.5);
+
+        let output = metrics.render().unwrap();
+        // The histogram should still render without NaN in the sum
+        assert!(
+            !output.contains("NaN"),
+            "NaN should not appear in rendered metrics"
         );
     }
 }

@@ -170,7 +170,21 @@ impl AgentRegistry for StorageBackedRegistry {
             .get_agent(id)
             .await
             .map_err(storage_err_to_identity)?;
-        Ok(stored_agent_to_domain(stored))
+        let agent = stored_agent_to_domain(stored);
+
+        // Check expiry (mirrors InMemoryRegistry::get_agent behavior).
+        // Previously, StorageBackedRegistry did not check expires_at,
+        // allowing expired agents to continue authenticating.
+        if !agent.active {
+            return Err(IdentityError::AgentDeactivated(id));
+        }
+        if let Some(expires_at) = agent.expires_at {
+            if chrono::Utc::now() > expires_at {
+                return Err(IdentityError::AgentDeactivated(id));
+            }
+        }
+
+        Ok(agent)
     }
 
     async fn update_trust_level(
@@ -256,10 +270,21 @@ impl AgentRegistry for StorageBackedRegistry {
         }
 
         // Validate target exists.
-        self.agent_store
+        let target = self
+            .agent_store
             .get_agent(to)
             .await
             .map_err(|_| IdentityError::DelegationTargetNotFound(to))?;
+
+        // Prevent cross-owner delegation.
+        if parent.owner != target.owner {
+            return Err(IdentityError::CrossOwnerDelegation {
+                from,
+                to,
+                from_owner: parent.owner.clone(),
+                to_owner: target.owner.clone(),
+            });
+        }
 
         // Enforce scope narrowing.
         for scope in &scope_narrowing {
@@ -640,8 +665,12 @@ mod tests {
 
         registry.deactivate_agent(agent.id).await.unwrap();
 
-        let fetched = registry.get_agent(agent.id).await.unwrap();
-        assert!(!fetched.active);
+        // get_agent should now return AgentDeactivated for inactive agents.
+        let result = registry.get_agent(agent.id).await;
+        assert!(
+            matches!(result, Err(IdentityError::AgentDeactivated(_))),
+            "get_agent on deactivated agent should return AgentDeactivated, got {result:?}"
+        );
 
         // Double deactivation should error
         let result = registry.deactivate_agent(agent.id).await;
@@ -728,7 +757,7 @@ mod tests {
 
         let a = registry
             .register_agent(
-                "user:a".into(),
+                "user:alice".into(),
                 "model-a".into(),
                 vec!["read".into()],
                 TrustLevel::Trusted,
@@ -739,7 +768,7 @@ mod tests {
 
         let b = registry
             .register_agent(
-                "user:b".into(),
+                "user:alice".into(),
                 "model-b".into(),
                 vec!["read".into()],
                 TrustLevel::Trusted,
@@ -817,10 +846,13 @@ mod tests {
         let deactivated = registry.cascade_deactivate(root.id).await.unwrap();
         assert_eq!(deactivated.len(), 3);
 
-        // All three should be inactive
+        // All three should be deactivated (get_agent returns error).
         for agent_id in [root.id, mid.id, leaf.id] {
-            let agent = registry.get_agent(agent_id).await.unwrap();
-            assert!(!agent.active);
+            let result = registry.get_agent(agent_id).await;
+            assert!(
+                matches!(result, Err(IdentityError::AgentDeactivated(_))),
+                "cascade-deactivated agent {agent_id} should return AgentDeactivated, got {result:?}"
+            );
         }
     }
 }

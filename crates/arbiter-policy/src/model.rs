@@ -36,6 +36,12 @@ pub struct Policy {
     #[serde(default)]
     pub allowed_tools: Vec<String>,
 
+    /// Allowed resource URI prefixes for non-tool-call methods (resources/read, etc.).
+    /// If non-empty, the request's resource_uri must start with one of these prefixes.
+    /// Empty means "all resource URIs" (no URI restriction beyond tool matching).
+    #[serde(default)]
+    pub resource_match: Vec<String>,
+
     /// Parameter constraints as key-value bounds (e.g., max file size).
     #[serde(default)]
     pub parameter_constraints: Vec<ParameterConstraint>,
@@ -191,6 +197,18 @@ impl PolicyConfig {
     /// Called automatically by `from_toml`. Call manually after constructing
     /// a `PolicyConfig` programmatically.
     pub fn compile(&mut self) -> Result<(), crate::PolicyError> {
+        // Check for duplicate policy IDs.
+        {
+            let mut seen = std::collections::HashSet::new();
+            for policy in &self.policies {
+                if !seen.insert(&policy.id) {
+                    return Err(crate::PolicyError::DuplicatePolicyId {
+                        policy_id: policy.id.clone(),
+                    });
+                }
+            }
+        }
+
         // Cap manual priority override to prevent
         // specificity gaming via arbitrarily high priority values.
         const MAX_PRIORITY: i32 = 1000;
@@ -247,11 +265,14 @@ impl PolicyConfig {
         // An empty allowed_tools list means the policy matches ALL tools, which
         // may be unintentional and creates an overpermissive rule.
         for policy in &self.policies {
-            if policy.allowed_tools.is_empty() && policy.effect == Effect::Allow {
+            if policy.allowed_tools.is_empty() {
+                let effect_name = format!("{:?}", policy.effect).to_lowercase();
                 tracing::warn!(
                     policy_id = %policy.id,
-                    "policy has empty allowed_tools (this allows ALL tools). \
-                     Set allowed_tools explicitly, or add allow_all_tools = true to suppress this warning."
+                    effect = %effect_name,
+                    "policy has empty allowed_tools (matches ALL tools). \
+                     This creates a blanket {effect} rule. Set allowed_tools explicitly.",
+                    effect = effect_name,
                 );
             }
         }
@@ -399,6 +420,7 @@ mod tests {
             principal_match: Default::default(),
             intent_match: Default::default(),
             allowed_tools: vec![],
+            resource_match: vec![],
             parameter_constraints: vec![],
             effect: Effect::Allow,
             disposition: Disposition::Block,
@@ -414,6 +436,7 @@ mod tests {
             principal_match: Default::default(),
             intent_match: Default::default(),
             allowed_tools: vec![],
+            resource_match: vec![],
             parameter_constraints: vec![],
             effect: Effect::Deny,
             disposition: Disposition::Block,

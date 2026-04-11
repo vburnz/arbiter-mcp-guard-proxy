@@ -93,8 +93,18 @@ impl AuditCapture {
         self.entry.arguments = args;
     }
 
+    /// Valid authorization decision values. Callers must use one of these.
+    const VALID_DECISIONS: &'static [&'static str] = &["allow", "deny", "escalate"];
+
     pub fn set_authorization_decision(&mut self, decision: impl Into<String>) {
-        self.entry.authorization_decision = decision.into();
+        let decision = decision.into();
+        if !Self::VALID_DECISIONS.contains(&decision.as_str()) {
+            tracing::warn!(
+                decision = %decision,
+                "invalid authorization_decision value; expected one of: allow, deny, escalate"
+            );
+        }
+        self.entry.authorization_decision = decision;
     }
 
     pub fn set_policy_matched(&mut self, policy: impl Into<String>) {

@@ -72,6 +72,8 @@ async fn spawn_proxy(
         None, // no file-based audit sink in tests
         RedactionConfig::default(),
         metrics,
+        10 * 1024 * 1024, // 10 MB max body
+        std::time::Duration::from_secs(30), // 30s upstream timeout
     ));
 
     tokio::spawn(async move {
@@ -161,10 +163,14 @@ async fn middleware_rejects_missing_required_header() {
     };
     let (proxy_addr, _metrics) = spawn_proxy(upstream_addr, mw).await;
 
-    // Missing required header.
+    // Missing required header returns generic 400 without exposing the header name.
     let (status, body) = get(&format!("http://{proxy_addr}/api")).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(body.contains("x-api-key"));
+    assert!(
+        !body.contains("x-api-key"),
+        "response must NOT leak the required header name; got: {body}"
+    );
+    assert!(body.contains("Bad Request"));
 }
 
 #[tokio::test]

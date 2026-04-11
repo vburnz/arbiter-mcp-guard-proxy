@@ -70,6 +70,7 @@ impl StorageBackedSessionStore {
             delegation_chain_snapshot: req.delegation_chain_snapshot,
             declared_intent: req.declared_intent,
             authorized_tools: req.authorized_tools,
+            authorized_credentials: req.authorized_credentials,
             time_limit: req.time_limit,
             call_budget: req.call_budget,
             calls_made: 0,
@@ -101,16 +102,78 @@ impl StorageBackedSessionStore {
         session
     }
 
+    /// Atomically check per-agent session cap and create if under the limit.
+    pub async fn create_if_under_cap(
+        &self,
+        req: CreateSessionRequest,
+        max_sessions: u64,
+    ) -> Result<TaskSession, SessionError> {
+        let mut cache = self.cache.write().await;
+
+        let active_count = cache
+            .values()
+            .filter(|s| s.agent_id == req.agent_id && s.status == SessionStatus::Active)
+            .count() as u64;
+
+        if active_count >= max_sessions {
+            return Err(SessionError::TooManySessions {
+                agent_id: req.agent_id.to_string(),
+                max: max_sessions,
+                current: active_count,
+            });
+        }
+
+        let session = TaskSession {
+            session_id: uuid::Uuid::new_v4(),
+            agent_id: req.agent_id,
+            delegation_chain_snapshot: req.delegation_chain_snapshot,
+            declared_intent: req.declared_intent,
+            authorized_tools: req.authorized_tools,
+            authorized_credentials: req.authorized_credentials,
+            time_limit: req.time_limit,
+            call_budget: req.call_budget,
+            calls_made: 0,
+            rate_limit_per_minute: req.rate_limit_per_minute,
+            rate_window_start: chrono::Utc::now(),
+            rate_window_calls: 0,
+            rate_limit_window_secs: req.rate_limit_window_secs,
+            data_sensitivity_ceiling: req.data_sensitivity_ceiling,
+            created_at: chrono::Utc::now(),
+            status: SessionStatus::Active,
+        };
+
+        // Write-through to storage.
+        let stored = domain_to_stored(&session);
+        if let Err(e) = self.storage.insert_session(&stored).await {
+            tracing::error!(error = %e, "failed to persist session to storage");
+        }
+
+        cache.insert(session.session_id, session.clone());
+        Ok(session)
+    }
+
     /// Record a tool call against the session, checking all constraints.
     pub async fn use_session(
         &self,
         session_id: SessionId,
         tool_name: &str,
+        requesting_agent_id: Option<uuid::Uuid>,
     ) -> Result<TaskSession, SessionError> {
         let mut cache = self.cache.write().await;
         let session = cache
             .get_mut(&session_id)
             .ok_or(SessionError::NotFound(session_id))?;
+
+        // Verify agent binding to prevent session fixation.
+        if let Some(agent_id) = requesting_agent_id {
+            if agent_id != session.agent_id {
+                return Err(SessionError::AgentMismatch {
+                    session_id,
+                    expected: session.agent_id,
+                    actual: agent_id,
+                });
+            }
+        }
 
         if session.status == SessionStatus::Closed {
             return Err(SessionError::AlreadyClosed(session_id));
@@ -160,10 +223,15 @@ impl StorageBackedSessionStore {
 
         let result = session.clone();
 
-        // Write-through: update storage.
+        // Write-through: update storage. Propagate failure so callers know
+        // the budget increment is not durably committed.
         let stored = domain_to_stored(&result);
         if let Err(e) = self.storage.update_session(&stored).await {
             tracing::error!(error = %e, "failed to persist session update");
+            return Err(SessionError::StorageWriteThrough {
+                session_id,
+                detail: e.to_string(),
+            });
         }
 
         Ok(result)
@@ -179,11 +247,23 @@ impl StorageBackedSessionStore {
         &self,
         session_id: SessionId,
         tool_names: &[&str],
+        requesting_agent_id: Option<uuid::Uuid>,
     ) -> Result<TaskSession, SessionError> {
         let mut cache = self.cache.write().await;
         let session = cache
             .get_mut(&session_id)
             .ok_or(SessionError::NotFound(session_id))?;
+
+        // Verify agent binding to prevent session fixation.
+        if let Some(agent_id) = requesting_agent_id {
+            if agent_id != session.agent_id {
+                return Err(SessionError::AgentMismatch {
+                    session_id,
+                    expected: session.agent_id,
+                    actual: agent_id,
+                });
+            }
+        }
 
         if session.status == SessionStatus::Closed {
             return Err(SessionError::AlreadyClosed(session_id));
@@ -258,10 +338,14 @@ impl StorageBackedSessionStore {
 
         let result = session.clone();
 
-        // Write-through: update storage.
+        // Write-through: update storage. Propagate failure.
         let stored = domain_to_stored(&result);
         if let Err(e) = self.storage.update_session(&stored).await {
             tracing::error!(error = %e, "failed to persist session batch update");
+            return Err(SessionError::StorageWriteThrough {
+                session_id,
+                detail: e.to_string(),
+            });
         }
 
         Ok(result)
@@ -322,16 +406,34 @@ impl StorageBackedSessionStore {
     ///
     /// Called during agent deactivation.
     pub async fn close_sessions_for_agent(&self, agent_id: uuid::Uuid) -> usize {
-        let mut cache = self.cache.write().await;
-        let mut closed = 0usize;
-        for session in cache.values_mut() {
-            if session.agent_id == agent_id && session.status == SessionStatus::Active {
-                session.status = SessionStatus::Closed;
-                let stored = domain_to_stored(session);
-                if let Err(e) = self.storage.update_session(&stored).await {
-                    tracing::error!(error = %e, "failed to persist session closure during agent deactivation");
+        // Collect sessions to close while holding the write lock, then release
+        // the lock before performing storage writes. This prevents blocking all
+        // other session operations during sequential async storage writes.
+        let to_persist: Vec<StoredSession>;
+        let closed: usize;
+        {
+            let mut cache = self.cache.write().await;
+            let mut count = 0usize;
+            let mut stored_sessions = Vec::new();
+            for session in cache.values_mut() {
+                if session.agent_id == agent_id && session.status == SessionStatus::Active {
+                    session.status = SessionStatus::Closed;
+                    stored_sessions.push(domain_to_stored(session));
+                    count += 1;
                 }
-                closed += 1;
+            }
+            to_persist = stored_sessions;
+            closed = count;
+        } // write lock released here
+
+        // Persist closures outside the critical section.
+        for stored in &to_persist {
+            if let Err(e) = self.storage.update_session(stored).await {
+                tracing::error!(
+                    error = %e,
+                    session_id = %stored.session_id,
+                    "failed to persist session closure during agent deactivation"
+                );
             }
         }
         closed
@@ -385,14 +487,30 @@ fn domain_to_stored(session: &TaskSession) -> StoredSession {
     }
 }
 
+/// Maximum session duration (24 hours). Re-validated on reload to prevent
+/// a compromised storage backend from extending sessions indefinitely.
+const MAX_SESSION_TIME_LIMIT_SECS: i64 = 86400;
+
 fn stored_to_domain(stored: StoredSession) -> Result<TaskSession, String> {
+    // Re-validate time_limit_secs upper bound on reload.
+    let clamped_time_limit = stored.time_limit_secs.min(MAX_SESSION_TIME_LIMIT_SECS);
+    if stored.time_limit_secs > MAX_SESSION_TIME_LIMIT_SECS {
+        tracing::warn!(
+            session_id = %stored.session_id,
+            stored = stored.time_limit_secs,
+            clamped = clamped_time_limit,
+            "session time_limit_secs exceeded maximum on reload, clamping"
+        );
+    }
+
     Ok(TaskSession {
         session_id: stored.session_id,
         agent_id: stored.agent_id,
         delegation_chain_snapshot: stored.delegation_chain_snapshot,
         declared_intent: stored.declared_intent,
         authorized_tools: stored.authorized_tools,
-        time_limit: chrono::Duration::seconds(stored.time_limit_secs),
+        authorized_credentials: vec![], // TODO: persist in StoredSession once storage schema is updated
+        time_limit: chrono::Duration::seconds(clamped_time_limit),
         call_budget: stored.call_budget,
         calls_made: stored.calls_made,
         rate_limit_per_minute: stored.rate_limit_per_minute,
@@ -507,6 +625,7 @@ mod tests {
             delegation_chain_snapshot: vec![],
             declared_intent: "read and analyze files".into(),
             authorized_tools: vec!["read_file".into(), "list_dir".into()],
+            authorized_credentials: vec![],
             time_limit: chrono::Duration::hours(1),
             call_budget: 5,
             rate_limit_per_minute: None,
@@ -532,7 +651,7 @@ mod tests {
         assert!(session.is_active());
 
         let updated = store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
         assert_eq!(updated.calls_made, 1);
@@ -550,15 +669,15 @@ mod tests {
         let session = store.create(req).await;
 
         store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
         store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
 
-        let result = store.use_session(session.session_id, "read_file").await;
+        let result = store.use_session(session.session_id, "read_file", None).await;
         assert!(matches!(result, Err(SessionError::BudgetExceeded { .. })));
     }
 
@@ -568,11 +687,11 @@ mod tests {
         let session = store.create(test_create_request()).await;
 
         store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
 
-        let result = store.use_session(session.session_id, "delete_file").await;
+        let result = store.use_session(session.session_id, "delete_file", None).await;
         assert!(matches!(
             result,
             Err(SessionError::ToolNotAuthorized { .. })
@@ -588,7 +707,7 @@ mod tests {
 
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
-        let result = store.use_session(session.session_id, "read_file").await;
+        let result = store.use_session(session.session_id, "read_file", None).await;
         assert!(matches!(result, Err(SessionError::Expired(_))));
     }
 
@@ -599,7 +718,7 @@ mod tests {
 
         store.close(session.session_id).await.unwrap();
 
-        let result = store.use_session(session.session_id, "read_file").await;
+        let result = store.use_session(session.session_id, "read_file", None).await;
         assert!(matches!(result, Err(SessionError::AlreadyClosed(_))));
     }
 
@@ -607,7 +726,7 @@ mod tests {
     async fn session_not_found() {
         let (store, _mock) = make_store().await;
         let fake_id = Uuid::new_v4();
-        let result = store.use_session(fake_id, "anything").await;
+        let result = store.use_session(fake_id, "anything", None).await;
         assert!(matches!(result, Err(SessionError::NotFound(_))));
     }
 
@@ -622,7 +741,7 @@ mod tests {
 
         // Batch contains one unauthorized tool ("delete_file").
         let result = store
-            .use_session_batch(session.session_id, &["read_file", "delete_file"])
+            .use_session_batch(session.session_id, &["read_file", "delete_file"], None)
             .await;
         assert!(
             matches!(result, Err(SessionError::ToolNotAuthorized { .. })),
@@ -650,6 +769,7 @@ mod tests {
             .use_session_batch(
                 session.session_id,
                 &["read_file", "read_file", "read_file", "read_file"],
+                None,
             )
             .await;
         assert!(
@@ -679,6 +799,7 @@ mod tests {
             .use_session_batch(
                 session.session_id,
                 &["read_file", "read_file", "read_file", "read_file"],
+                None,
             )
             .await;
         assert!(
@@ -739,7 +860,7 @@ mod tests {
 
         // After use_session, storage must reflect the increment.
         store
-            .use_session(session.session_id, "read_file")
+            .use_session(session.session_id, "read_file", None)
             .await
             .unwrap();
         let stored = mock.get_session(session.session_id).await.unwrap();

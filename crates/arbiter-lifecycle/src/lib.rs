@@ -10,4 +10,4 @@ pub mod token;
 pub use api::router;
 pub use state::AdminRateLimiter;
 pub use state::AppState;
-pub use token::TokenConfig;
+pub use token::{JtiBlocklist, TokenConfig};

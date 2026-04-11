@@ -46,6 +46,14 @@ pub struct TaskSession {
     /// Tools this session is authorized to call (from policy evaluation).
     pub authorized_tools: Vec<String>,
 
+    /// Credential references this session is authorized to resolve.
+    /// Empty means no credentials are allowed (deny-by-default).
+    /// This prevents agents from injecting `${CRED:admin_password}` inside
+    /// an authorized tool call's arguments when they should only access
+    /// their own credentials.
+    #[serde(default)]
+    pub authorized_credentials: Vec<String>,
+
     /// Maximum duration for this session.
     pub time_limit: chrono::Duration,
 
@@ -99,6 +107,15 @@ impl TaskSession {
         self.authorized_tools.is_empty() || self.authorized_tools.iter().any(|t| t == tool_name)
     }
 
+    /// Returns true if the given credential reference is authorized in this session.
+    /// Empty authorized_credentials means all credentials are allowed (wide-open,
+    /// matching the same pattern as `is_tool_authorized` for backward compatibility).
+    /// Non-empty means only the listed credential references are permitted.
+    pub fn is_credential_authorized(&self, reference: &str) -> bool {
+        self.authorized_credentials.is_empty()
+            || self.authorized_credentials.iter().any(|c| c == reference)
+    }
+
     /// Returns true if the session is active and usable.
     pub fn is_active(&self) -> bool {
         self.status == SessionStatus::Active && !self.is_expired() && !self.is_budget_exceeded()
@@ -138,6 +155,7 @@ mod tests {
             delegation_chain_snapshot: vec![],
             declared_intent: "read files".into(),
             authorized_tools: vec!["read_file".into(), "list_dir".into()],
+            authorized_credentials: vec![],
             time_limit: chrono::Duration::hours(1),
             call_budget: 100,
             calls_made: 0,

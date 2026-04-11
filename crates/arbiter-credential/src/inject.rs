@@ -26,7 +26,9 @@ static CRED_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 const REDACTED: &str = "[CREDENTIAL]";
 
 /// Result of injecting credentials into a request.
-#[derive(Debug)]
+///
+/// Manual Debug implementation redacts the body and headers fields
+/// to prevent accidental credential exposure through logging.
 pub struct InjectedRequest {
     /// The rewritten request body with credential references substituted.
     pub body: String,
@@ -38,6 +40,17 @@ pub struct InjectedRequest {
     /// Stored as [`SecretString`] so they are zeroized on drop and never
     /// accidentally exposed through `Debug` or `Display`.
     pub resolved_values: Vec<SecretString>,
+}
+
+impl std::fmt::Debug for InjectedRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InjectedRequest")
+            .field("body", &"[REDACTED]")
+            .field("headers", &format!("{} entries", self.headers.len()))
+            .field("resolved_refs", &self.resolved_refs)
+            .field("resolved_values", &format!("{} secrets", self.resolved_values.len()))
+            .finish()
+    }
 }
 
 /// Inject credentials into a request body and a set of headers.
@@ -112,6 +125,7 @@ pub fn scrub_response(body: &str, known_values: &[SecretString]) -> String {
 ///
 /// Backward-compatible entry point for callers that do not yet use
 /// [`SecretString`]. Prefer [`scrub_response`] with `SecretString` values.
+#[deprecated(since = "0.0.12", note = "use scrub_response with SecretString values instead")]
 pub fn scrub_response_plain(body: &str, known_values: &[String]) -> String {
     let mut sorted_values: Vec<&String> = known_values.iter().collect();
     sorted_values.sort_by_key(|v| std::cmp::Reverse(v.len()));

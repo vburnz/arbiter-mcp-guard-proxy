@@ -184,6 +184,7 @@ keywords = ["read", "analyze"]
             delegation_chain_snapshot: vec![],
             declared_intent: "read and analyze log files".into(),
             authorized_tools: vec!["read_file".into(), "list_dir".into()],
+            authorized_credentials: vec![],
             time_limit: chrono::Duration::hours(1),
             call_budget: u64::MAX,
             rate_limit_per_minute: None,
@@ -224,7 +225,7 @@ keywords = ["read", "analyze"]
 
                 // Stage 3: Session enforcement
                 let session_result = session_store
-                    .use_session(black_box(session.session_id), black_box("read_file"))
+                    .use_session(black_box(session.session_id), black_box("read_file"), None)
                     .await;
                 black_box(&session_result);
 

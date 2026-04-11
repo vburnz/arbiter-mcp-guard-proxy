@@ -18,7 +18,9 @@ pub enum OAuthError {
     JwtValidation(#[from] jsonwebtoken::errors::Error),
 
     /// No cached key matched the JWT's `kid` header.
-    #[error("no matching key found for kid: {0}")]
+    /// kid value is kept in the variant for internal tracing but NOT
+    /// exposed in Display to prevent key identifier enumeration.
+    #[error("no matching key found")]
     KeyNotFound(String),
 
     /// Fetching the JWKS endpoint failed.

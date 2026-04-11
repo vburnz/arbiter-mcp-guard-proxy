@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use thiserror::Error;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex;
 
 use crate::entry::AuditEntry;
 
@@ -27,13 +28,22 @@ pub struct AuditSinkConfig {
 
     /// Optional path to an append-only audit log file.
     pub file_path: Option<PathBuf>,
+
+    /// Maximum audit log file size in bytes before emitting warnings.
+    /// Default: 100 MB. The sink emits tracing::warn when the file
+    /// exceeds this size so operators can set up external log rotation.
+    pub max_file_size_bytes: u64,
 }
+
+/// Default max audit file size: 100 MB.
+const DEFAULT_MAX_AUDIT_FILE_SIZE: u64 = 100 * 1024 * 1024;
 
 impl Default for AuditSinkConfig {
     fn default() -> Self {
         Self {
             write_stdout: true,
             file_path: None,
+            max_file_size_bytes: DEFAULT_MAX_AUDIT_FILE_SIZE,
         }
     }
 }
@@ -43,6 +53,14 @@ impl Default for AuditSinkConfig {
 /// Tracks write failures via an atomic counter. When the file sink
 /// fails (disk full, permissions), the proxy can surface this via
 /// `X-Arbiter-Audit-Degraded` response headers.
+/// Hash chain state for tamper detection.
+struct ChainState {
+    /// Monotonic sequence counter.
+    sequence: u64,
+    /// Hash of the previous entry (hex-encoded).
+    prev_hash: String,
+}
+
 pub struct AuditSink {
     config: AuditSinkConfig,
     stats: crate::stats::AuditStats,
@@ -54,6 +72,11 @@ pub struct AuditSink {
     /// the sink must succeed N times before transitioning from degraded to healthy,
     /// preventing rapid flapping when the underlying issue is intermittent.
     recovery_successes: AtomicU64,
+    /// Hash chain state for tamper detection (sequence + prev hash).
+    chain: Mutex<ChainState>,
+    /// Persistent file handle, opened once at construction to avoid
+    /// the race window between open() and write() on each entry.
+    file: Option<Mutex<tokio::fs::File>>,
 }
 
 impl AuditSink {
@@ -65,7 +88,26 @@ impl AuditSink {
             write_failures: AtomicU64::new(0),
             total_write_failures: AtomicU64::new(0),
             recovery_successes: AtomicU64::new(0),
+            chain: Mutex::new(ChainState {
+                sequence: 0,
+                prev_hash: "genesis".into(),
+            }),
+            file: None,
         }
+    }
+
+    /// Open the persistent file handle. Call once after construction.
+    /// Using a separate init method because async isn't allowed in `new`.
+    pub async fn init_file(&mut self) -> Result<(), SinkError> {
+        if let Some(ref path) = self.config.file_path {
+            let file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .await?;
+            self.file = Some(Mutex::new(file));
+        }
+        Ok(())
     }
 
     /// Get a handle to the audit stats tracker for querying.
@@ -99,10 +141,24 @@ impl AuditSink {
     /// Writes to stdout and file sinks in order. The file sink is considered
     /// critical -- errors are tracked and returned.
     pub async fn write(&self, entry: &AuditEntry) -> Result<(), SinkError> {
-        // Update in-memory stats counters.
-        self.stats.record(entry).await;
+        // Compute hash chain: assign sequence number and hash.
+        let mut chained_entry = entry.clone();
+        {
+            let mut chain = self.chain.lock().await;
+            chain.sequence += 1;
+            chained_entry.chain_sequence = Some(chain.sequence);
+            chained_entry.chain_prev_hash = Some(chain.prev_hash.clone());
+            // chain_record_hash is computed over the entry WITH sequence and prev_hash
+            // but WITHOUT the record_hash itself.
+            chained_entry.chain_record_hash = None;
+            let pre_hash_json = serde_json::to_string(&chained_entry)
+                .unwrap_or_default();
+            let record_hash = blake3::hash(pre_hash_json.as_bytes()).to_hex().to_string();
+            chained_entry.chain_record_hash = Some(record_hash.clone());
+            chain.prev_hash = record_hash;
+        }
 
-        let json = serde_json::to_string(entry)?;
+        let json = serde_json::to_string(&chained_entry)?;
 
         if self.config.write_stdout {
             // Structured JSON line to stdout via tracing (12-factor).
@@ -141,10 +197,27 @@ impl AuditSink {
             }
         }
 
+        // Update in-memory stats AFTER all writes succeed.
+        // Previously stats were updated before the write, causing counters
+        // to diverge from actual committed entries on write failure.
+        self.stats.record(entry).await;
+
         Ok(())
     }
 
     async fn write_to_file(&self, path: &PathBuf, json: &str) -> Result<(), SinkError> {
+        // Use the persistent file handle if available (opened once at init).
+        // Falls back to per-write open for backward compatibility.
+        if let Some(ref file_mutex) = self.file {
+            let mut file = file_mutex.lock().await;
+            file.write_all(json.as_bytes()).await?;
+            file.write_all(b"\n").await?;
+            file.flush().await?;
+            file.sync_all().await?;
+            return Ok(());
+        }
+
+        // Fallback: open per-write (legacy path).
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -153,6 +226,7 @@ impl AuditSink {
         file.write_all(json.as_bytes()).await?;
         file.write_all(b"\n").await?;
         file.flush().await?;
+        file.sync_all().await?;
         Ok(())
     }
 }

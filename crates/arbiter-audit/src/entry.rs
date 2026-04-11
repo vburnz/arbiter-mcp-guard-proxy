@@ -51,6 +51,21 @@ pub struct AuditEntry {
     /// Inspection findings from content inspection.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inspection_findings: Vec<String>,
+
+    /// Monotonic sequence number for tamper detection.
+    /// A gap in sequence numbers indicates a lost or deleted entry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_sequence: Option<u64>,
+
+    /// Blake3 hash of the previous entry (hex-encoded).
+    /// Forms a hash chain for integrity verification.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_prev_hash: Option<String>,
+
+    /// Blake3 hash of this entry (hex-encoded), computed over all fields
+    /// except this one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_record_hash: Option<String>,
 }
 
 impl AuditEntry {
@@ -71,6 +86,9 @@ impl AuditEntry {
             latency_ms: 0,
             upstream_status: None,
             inspection_findings: Vec::new(),
+            chain_sequence: None,
+            chain_prev_hash: None,
+            chain_record_hash: None,
         }
     }
 }

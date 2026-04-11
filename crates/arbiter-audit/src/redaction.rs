@@ -113,7 +113,23 @@ fn has_letter_boundary_match(key: &str, pattern: &Regex) -> bool {
     false
 }
 
+/// Maximum recursion depth for redaction to prevent stack overflow
+/// from adversarially deep JSON structures.
+const MAX_REDACTION_DEPTH: usize = 64;
+
 fn redact_value(value: &serde_json::Value, patterns: &[Regex]) -> serde_json::Value {
+    redact_value_depth(value, patterns, 0)
+}
+
+fn redact_value_depth(
+    value: &serde_json::Value,
+    patterns: &[Regex],
+    depth: usize,
+) -> serde_json::Value {
+    if depth >= MAX_REDACTION_DEPTH {
+        // Truncate at max depth to prevent stack overflow.
+        return serde_json::Value::String("[TRUNCATED: max redaction depth]".into());
+    }
     match value {
         serde_json::Value::Object(map) => {
             let mut redacted = serde_json::Map::new();
@@ -121,14 +137,16 @@ fn redact_value(value: &serde_json::Value, patterns: &[Regex]) -> serde_json::Va
                 if patterns.iter().any(|p| has_letter_boundary_match(k, p)) {
                     redacted.insert(k.clone(), serde_json::Value::String(REDACTED.into()));
                 } else {
-                    redacted.insert(k.clone(), redact_value(v, patterns));
+                    redacted.insert(k.clone(), redact_value_depth(v, patterns, depth + 1));
                 }
             }
             serde_json::Value::Object(redacted)
         }
-        serde_json::Value::Array(arr) => {
-            serde_json::Value::Array(arr.iter().map(|v| redact_value(v, patterns)).collect())
-        }
+        serde_json::Value::Array(arr) => serde_json::Value::Array(
+            arr.iter()
+                .map(|v| redact_value_depth(v, patterns, depth + 1))
+                .collect(),
+        ),
         other => other.clone(),
     }
 }

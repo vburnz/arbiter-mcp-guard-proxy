@@ -18,8 +18,9 @@ struct Cli {
     #[arg(long, env = "ARBITER_API_URL", default_value = "http://127.0.0.1:3000")]
     api_url: String,
 
-    /// Admin API key for authentication.
-    #[arg(long, env = "ARBITER_API_KEY", default_value = "")]
+    /// Admin API key for authentication. Prefer ARBITER_API_KEY env var
+    /// over --api-key to avoid exposure in process listings and shell history.
+    #[arg(long, env = "ARBITER_API_KEY", default_value = "", hide = true)]
     api_key: String,
 
     #[command(subcommand)]
@@ -98,6 +99,20 @@ enum PolicyAction {
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
+
+    // Warn if using http:// for non-loopback targets (API key sent in cleartext).
+    if cli.api_url.starts_with("http://")
+        && !cli.api_url.contains("127.0.0.1")
+        && !cli.api_url.contains("localhost")
+        && !cli.api_url.contains("[::1]")
+    {
+        eprintln!(
+            "WARNING: using http:// for non-loopback target '{}'. \
+             API key will be sent in cleartext. Use https:// for production.",
+            cli.api_url
+        );
+    }
+
     let client = reqwest::Client::new();
 
     let result = match cli.command {
@@ -176,7 +191,18 @@ async fn register_agent(
 
     println!("Agent registered:");
     println!("  ID:    {}", body["agent_id"]);
-    println!("  Token: {}", body["token"]);
+    // Print token to stderr with sensitivity warning to reduce risk of
+    // capture in stdout pipelines and log aggregators.
+    let token = body["token"].as_str().unwrap_or("");
+    if token.len() > 12 {
+        eprintln!("  Token: {}...{}", &token[..6], &token[token.len()-6..]);
+    } else {
+        eprintln!("  Token: {token}");
+    }
+    eprintln!("  WARNING: this token is a long-lived credential. Store it securely.");
+    eprintln!("  Full token written to stdout for programmatic capture.");
+    // Full token on stdout for piping to a file or secret manager.
+    println!("  Token: {token}");
     Ok(())
 }
 
@@ -188,8 +214,15 @@ async fn create_delegation(
     to: &str,
     scopes: &[String],
 ) -> Result<(), String> {
+    // Validate from/to as UUIDs before building URLs to prevent path traversal.
+    let from_id: uuid::Uuid = from
+        .parse()
+        .map_err(|_| format!("invalid agent UUID: {from}"))?;
+    let _to_id: uuid::Uuid = to
+        .parse()
+        .map_err(|_| format!("invalid agent UUID: {to}"))?;
     let res = client
-        .post(format!("{base}/agents/{from}/delegate"))
+        .post(format!("{base}/agents/{from_id}/delegate"))
         .header("x-api-key", api_key)
         .json(&serde_json::json!({
             "to": to,
@@ -226,8 +259,12 @@ async fn revoke_agent(
     api_key: &str,
     agent_id: &str,
 ) -> Result<(), String> {
+    // Validate as UUID before building URL to prevent path traversal.
+    let id: uuid::Uuid = agent_id
+        .parse()
+        .map_err(|_| format!("invalid agent UUID: {agent_id}"))?;
     let res = client
-        .delete(format!("{base}/agents/{agent_id}"))
+        .delete(format!("{base}/agents/{id}"))
         .header("x-api-key", api_key)
         .send()
         .await
@@ -343,10 +380,12 @@ async fn doctor(
         }
     }
 
-    // Check 2: Policy reload endpoint (indicates policy system is active).
+    // Check 2: Policy status (read-only check, does NOT trigger a reload).
+    // Previously this called POST /policy/reload which is a side-effecting
+    // operation that could change the enforcement posture of a running gateway.
     print_check("Policy system");
     match client
-        .post(format!("{api_url}/policy/reload"))
+        .get(format!("{api_url}/policy/validate"))
         .header("x-api-key", api_key)
         .send()
         .await
@@ -622,8 +661,15 @@ async fn self_update(
         .map_err(|e| format!("cannot write tarball: {e}"))?;
 
     let status = std::process::Command::new("tar")
-        .args(["xzf", &tarball_path.to_string_lossy(), "-C"])
-        .arg(tmpdir.path())
+        .args([
+            "xzf",
+            &tarball_path.to_string_lossy(),
+            "-C",
+            &tmpdir.path().to_string_lossy(),
+            "--no-same-owner",
+            "--no-same-permissions",
+            "--strip-components=1",
+        ])
         .status()
         .map_err(|e| format!("tar extraction failed: {e}"))?;
 
@@ -714,7 +760,7 @@ fn detect_platform() -> Result<(&'static str, &'static str), String> {
 }
 
 fn verify_sha256(data: &[u8], filename: &str, checksums: &str) -> Result<(), String> {
-    use std::io::Write;
+    use sha2::{Sha256, Digest};
 
     let expected = checksums
         .lines()
@@ -722,37 +768,12 @@ fn verify_sha256(data: &[u8], filename: &str, checksums: &str) -> Result<(), Str
         .and_then(|line| line.split_whitespace().next())
         .ok_or_else(|| format!("no checksum found for {filename}"))?;
 
-    // Compute SHA256 using a subprocess (sha256sum or shasum)
-    let actual = if let Ok(output) = std::process::Command::new("sha256sum")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .spawn()
-        .and_then(|mut child| {
-            child.stdin.as_mut().unwrap().write_all(data)?;
-            child.wait_with_output()
-        }) {
-        String::from_utf8_lossy(&output.stdout)
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .to_string()
-    } else if let Ok(output) = std::process::Command::new("shasum")
-        .args(["-a", "256"])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .spawn()
-        .and_then(|mut child| {
-            child.stdin.as_mut().unwrap().write_all(data)?;
-            child.wait_with_output()
-        })
-    {
-        String::from_utf8_lossy(&output.stdout)
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .to_string()
-    } else {
-        return Err("no sha256sum or shasum found".into());
+    // Compute SHA256 in-process using the sha2 crate.
+    // Previously this spawned external sha256sum/shasum which could be PATH-hijacked.
+    let actual = {
+        let mut hasher = Sha256::new();
+        hasher.update(data);
+        format!("{:x}", hasher.finalize())
     };
 
     if expected != actual {

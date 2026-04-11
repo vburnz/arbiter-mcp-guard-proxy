@@ -475,30 +475,87 @@ pub async fn handle_request(
                 )
                 .await);
             }
+            // When require_session is true AND a session header is provided,
+            // validate the session even for non-POST methods. This prevents
+            // non-POST requests from bypassing session expiry, budget, and
+            // agent-binding checks.
+            if state.require_session && !session_id_header.is_empty() {
+                if let Some(sid) = arbiter_session::parse_session_header(&session_id_header) {
+                    let agent_uuid = agent_id_header.parse::<uuid::Uuid>().ok();
+                    match state.session_store.get(sid).await {
+                        Ok(session) => {
+                            if session.is_expired() {
+                                return Ok(deny(
+                                    &state, capture, request_id, request_start,
+                                    StatusCode::REQUEST_TIMEOUT, None,
+                                    ArbiterError::session_error(&arbiter_session::SessionError::Expired(sid)),
+                                ).await);
+                            }
+                            if let Some(aid) = agent_uuid {
+                                if aid != session.agent_id {
+                                    return Ok(deny(
+                                        &state, capture, request_id, request_start,
+                                        StatusCode::FORBIDDEN, None,
+                                        ArbiterError::session_error(&arbiter_session::SessionError::AgentMismatch {
+                                            session_id: sid, expected: session.agent_id, actual: aid,
+                                        }),
+                                    ).await);
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            return Ok(deny(
+                                &state, capture, request_id, request_start,
+                                StatusCode::NOT_FOUND, None,
+                                ArbiterError::session_error(&arbiter_session::SessionError::NotFound(sid)),
+                            ).await);
+                        }
+                    }
+                }
+            }
             tracing::info!(
                 %method, %path, agent_id = %agent_id_header,
-                "non-POST method forwarded (deny_non_post_methods = false); \
-                 session/policy/behavior checks are NOT applied"
+                "non-POST method forwarded (deny_non_post_methods = false)"
             );
             capture.set_authorization_decision("allow");
         }
     }
 
-    if state.strict_mcp
-        && let ParseResult::NonMcp = &mcp_context
-        && method == "POST"
-    {
-        tracing::warn!("non-MCP POST body rejected in strict mode");
-        return Ok(deny(
-            &state,
-            capture,
-            request_id,
-            request_start,
-            StatusCode::FORBIDDEN,
-            None,
-            ArbiterError::non_mcp_rejected(),
-        )
-        .await);
+    if let ParseResult::NonMcp = &mcp_context {
+        if method == "POST" {
+            if state.strict_mcp {
+                tracing::warn!("non-MCP POST body rejected in strict mode");
+                return Ok(deny(
+                    &state,
+                    capture,
+                    request_id,
+                    request_start,
+                    StatusCode::FORBIDDEN,
+                    None,
+                    ArbiterError::non_mcp_rejected(),
+                )
+                .await);
+            }
+            // Even in non-strict mode, if policies are configured, NonMcp POST
+            // traffic must be denied. Otherwise an attacker can wrap a forbidden
+            // tool call in slightly malformed JSON-RPC to bypass all policy eval.
+            if (*state.policy_config.borrow()).is_some() {
+                tracing::warn!(
+                    "non-MCP POST body denied: policies are configured but body \
+                     is not valid JSON-RPC; cannot evaluate authorization"
+                );
+                return Ok(deny(
+                    &state,
+                    capture,
+                    request_id,
+                    request_start,
+                    StatusCode::FORBIDDEN,
+                    None,
+                    ArbiterError::non_mcp_rejected(),
+                )
+                .await);
+            }
+        }
     }
 
     // ── Shared preconditions for stages 7-9 ────────────────────────
@@ -665,7 +722,7 @@ pub async fn handle_request(
             status,
             policy_matched,
             error,
-        } = validate_session_tools(&state.session_store, session_id, &ctx.requests).await
+        } = validate_session_tools(&state.session_store, session_id, Some(header_agent_id), &ctx.requests).await
         {
             return Ok(deny(
                 &state,
@@ -911,12 +968,30 @@ pub async fn handle_request(
                                 agent_id = %agent_uuid,
                                 from = ?agent.trust_level,
                                 to = ?demoted,
-                                "trust level demoted due to accumulated behavioral anomalies"
+                                "trust level demoted due to accumulated behavioral anomalies; \
+                                 aborting current request before credential injection"
                             );
                             let _ = state.registry.update_trust_level(agent_uuid, demoted).await;
                             // Reset counter after demotion.
                             let mut counts = state.anomaly_counts.lock().await;
                             counts.insert(agent_uuid, (0, std::time::Instant::now()));
+
+                            // Abort the current request. The trust demotion must
+                            // take effect immediately, not on the next request.
+                            // Without this, the current request proceeds to
+                            // credential injection with the old trust level.
+                            return Ok(deny(
+                                &state,
+                                capture,
+                                request_id,
+                                request_start,
+                                StatusCode::FORBIDDEN,
+                                None,
+                                ArbiterError::behavioral_anomaly(
+                                    "request aborted: agent trust level demoted"
+                                ),
+                            )
+                            .await);
                         }
                     }
                 }
@@ -941,9 +1016,26 @@ pub async fn handle_request(
         }
     }
 
-    // ── Stage 9.5: Credential injection ─────────────────────────────
+    // ── Stage 9.5a: Canonicalize MCP body ──────────────────────────
+    // Reconstruct the forwarded body from the parsed MCP representation
+    // BEFORE credential injection, so that parser differentials (duplicate
+    // keys, unicode tricks) are eliminated. Credential injection then
+    // operates on the canonical form.
+    let body_bytes = if let ParseResult::Mcp(ref ctx) = mcp_context {
+        Bytes::from(ctx.to_canonical_body())
+    } else {
+        body_bytes
+    };
+
+    // ── Stage 9.5b: Credential injection ─────────────────────────────
+    // Only inject credentials when a session has been validated.
+    // Non-POST requests and NonMcp traffic skip session validation (stages 7/8/9),
+    // so they must NOT receive credential injection. Without this guard, any
+    // client sending a non-POST request with ${CRED:ref} patterns would receive
+    // resolved secrets with no authorization check.
     let mut injected_secrets: Vec<secrecy::SecretString> = Vec::new();
-    let body_bytes = if let Some(ref provider) = state.credential_provider {
+    let body_bytes = if fetched_session.is_some() && state.credential_provider.is_some() {
+        let provider = state.credential_provider.as_ref().unwrap();
         // Reject non-UTF-8 request bodies when credential injection is active.
         // Previously used from_utf8_lossy, which could break ${CRED:ref} patterns spanning
         // invalid UTF-8 boundaries, causing literal credential reference patterns to be forwarded
@@ -991,7 +1083,41 @@ pub async fn handle_request(
             })
             .collect();
 
-        let has_body_refs = !arbiter_credential::inject::find_refs(&body_str).is_empty();
+        let body_refs = arbiter_credential::inject::find_refs(&body_str);
+        let has_body_refs = !body_refs.is_empty();
+
+        // Validate each credential reference against the session's authorized_credentials.
+        // The session's authorized_credentials list (set at creation time) controls
+        // which credentials this session may resolve, preventing agents from
+        // injecting ${CRED:admin_password} inside an authorized tool call.
+        if let Some(ref session) = fetched_session {
+            for cred_ref in &body_refs {
+                if !session.is_credential_authorized(cred_ref) {
+                    tracing::warn!(
+                        credential_ref = cred_ref,
+                        session_id = %session.session_id,
+                        "credential reference not authorized for this session"
+                    );
+                    return Ok(deny(
+                        &state,
+                        capture,
+                        request_id,
+                        request_start,
+                        StatusCode::FORBIDDEN,
+                        None,
+                        ArbiterError {
+                            code: ErrorCode::SessionInvalid,
+                            message: "credential reference not authorized for this session".into(),
+                            detail: None,
+                            hint: None,
+                            request_id: Some(request_id.to_string()),
+                            policy_trace: None,
+                        },
+                    )
+                    .await);
+                }
+            }
+        }
 
         if !has_body_refs && header_pairs.is_empty() {
             body_bytes
@@ -1535,6 +1661,14 @@ impl ArbiterError {
             } => (
                 format!("agent {agent_id} has too many active sessions"),
                 "Close existing sessions before creating new ones.".to_string(),
+            ),
+            SessionError::AgentMismatch { session_id, .. } => (
+                format!("session {session_id} is not bound to this agent"),
+                "The session belongs to a different agent. Each session is bound to the agent that created it.".to_string(),
+            ),
+            SessionError::StorageWriteThrough { session_id, .. } => (
+                format!("session {session_id} storage write failed"),
+                "The session state update could not be persisted. Retry the request.".to_string(),
             ),
         };
         Self {

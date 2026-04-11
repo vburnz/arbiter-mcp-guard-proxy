@@ -17,7 +17,7 @@ pub struct OAuthConfig {
 }
 
 /// Configuration for a single OAuth issuer (e.g. Keycloak, Auth0, Okta).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct IssuerConfig {
     /// Human-readable name for this issuer (used in logs).
     pub name: String,
@@ -43,6 +43,27 @@ pub struct IssuerConfig {
     /// Client secret for introspection authentication.
     #[serde(default)]
     pub client_secret: Option<String>,
+
+    /// Allowed redirect URIs for authorization code flow.
+    /// If non-empty, redirect_uri in token exchange must exactly match
+    /// one of these values (no prefix matching, no wildcards).
+    #[serde(default)]
+    pub allowed_redirect_uris: Vec<String>,
+}
+
+impl std::fmt::Debug for IssuerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IssuerConfig")
+            .field("name", &self.name)
+            .field("issuer_url", &self.issuer_url)
+            .field("jwks_uri", &self.jwks_uri)
+            .field("audiences", &self.audiences)
+            .field("introspection_url", &self.introspection_url)
+            .field("client_id", &self.client_id)
+            .field("client_secret", &self.client_secret.as_ref().map(|_| "[REDACTED]"))
+            .field("allowed_redirect_uris", &self.allowed_redirect_uris)
+            .finish()
+    }
 }
 
 impl OAuthConfig {

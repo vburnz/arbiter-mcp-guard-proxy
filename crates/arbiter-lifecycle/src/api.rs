@@ -64,6 +64,9 @@ pub struct CreateSessionApiRequest {
     pub declared_intent: String,
     #[serde(default)]
     pub authorized_tools: Vec<String>,
+    /// Credential references this session may resolve. Empty = no credentials.
+    #[serde(default)]
+    pub authorized_credentials: Option<Vec<String>>,
     #[serde(default = "default_time_limit")]
     pub time_limit_secs: i64,
     #[serde(default = "default_call_budget")]
@@ -96,6 +99,7 @@ pub struct CreateSessionResponse {
     pub session_id: Uuid,
     pub declared_intent: String,
     pub authorized_tools: Vec<String>,
+    pub authorized_credentials: Vec<String>,
     pub call_budget: u64,
     pub time_limit_secs: i64,
 }
@@ -108,6 +112,7 @@ pub struct SessionStatusResponse {
     pub status: String,
     pub declared_intent: String,
     pub authorized_tools: Vec<String>,
+    pub authorized_credentials: Vec<String>,
     pub calls_made: u64,
     pub call_budget: u64,
     pub calls_remaining: u64,
@@ -206,9 +211,24 @@ fn validate_admin_key(
 /// Rate limiting prevents an attacker with a compromised API key
 /// from making unlimited requests to enumerate agents, create sessions, or
 /// overwhelm the control plane.
-fn check_admin_rate_limit(state: &AppState) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
-    if !state.admin_rate_limiter.check_rate_limit() {
-        tracing::warn!("ADMIN_AUDIT: rate limit exceeded on admin API");
+fn check_admin_rate_limit(
+    state: &AppState,
+    headers: &axum::http::HeaderMap,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    // Per-client rate limiting keyed by API key hash.
+    let client_key = headers
+        .get("x-api-key")
+        .and_then(|v| v.to_str().ok())
+        .map(|k| {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            k.hash(&mut hasher);
+            format!("key:{:x}", hasher.finish())
+        })
+        .unwrap_or_else(|| "__unauth__".to_string());
+
+    if !state.admin_rate_limiter.check_rate_limit(&client_key) {
+        tracing::warn!(client = %client_key, "ADMIN_AUDIT: rate limit exceeded on admin API");
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
             Json(ErrorResponse {
@@ -225,12 +245,13 @@ pub async fn register_agent(
     headers: HeaderMap,
     Json(req): Json<RegisterAgentRequest>,
 ) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     match state
         .registry
@@ -279,7 +300,7 @@ pub async fn register_agent(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    error: e.to_string(),
+                    error: "internal error".into(),
                 }),
             )
                 .into_response()
@@ -293,12 +314,13 @@ pub async fn get_agent(
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log("get_agent", Some(id), "");
 
@@ -311,13 +333,19 @@ pub async fn get_agent(
             )
                 .into_response(),
         },
-        Err(e) => (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-            .into_response(),
+        Err(e) => {
+            // Log the actual error internally but return an opaque message.
+            // Collapsing AgentNotFound/AgentDeactivated prevents attackers
+            // from probing whether a UUID is registered vs deactivated.
+            tracing::debug!(error = %e, agent_id = %id, "get_agent failed");
+            (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "agent not found".into(),
+                }),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -328,12 +356,13 @@ pub async fn delegate_agent(
     Path(from_id): Path<Uuid>,
     Json(req): Json<DelegateRequest>,
 ) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log("delegate_agent", Some(from_id), &format!("to={}", req.to));
 
@@ -366,7 +395,7 @@ pub async fn delegate_agent(
             (
                 status,
                 Json(ErrorResponse {
-                    error: e.to_string(),
+                    error: "internal error".into(),
                 }),
             )
                 .into_response()
@@ -380,12 +409,13 @@ pub async fn list_delegations(
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log("list_delegations", Some(id), "");
 
@@ -394,7 +424,7 @@ pub async fn list_delegations(
         return (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: e.to_string(),
+                error: "internal error".into(),
             }),
         )
             .into_response();
@@ -422,12 +452,13 @@ pub async fn deactivate_agent(
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log("deactivate_agent", Some(id), "cascade");
 
@@ -459,7 +490,7 @@ pub async fn deactivate_agent(
             (
                 status,
                 Json(ErrorResponse {
-                    error: e.to_string(),
+                    error: "internal error".into(),
                 }),
             )
                 .into_response()
@@ -474,12 +505,13 @@ pub async fn issue_agent_token(
     Path(id): Path<Uuid>,
     body: Option<Json<TokenRequest>>,
 ) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log("issue_agent_token", Some(id), "");
 
@@ -489,7 +521,7 @@ pub async fn issue_agent_token(
             return (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    error: e.to_string(),
+                    error: "internal error".into(),
                 }),
             )
                 .into_response();
@@ -548,12 +580,13 @@ pub async fn issue_agent_token(
 
 /// GET /agents: list all agents.
 pub async fn list_agents(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log("list_agents", None, "");
 
@@ -574,12 +607,13 @@ pub async fn create_session(
     headers: HeaderMap,
     Json(req): Json<CreateSessionApiRequest>,
 ) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log(
         "create_session",
@@ -715,6 +749,20 @@ pub async fn create_session(
             .into_response();
     }
 
+    // Limit declared_intent length to prevent keyword injection amplification
+    // and memory exhaustion in regex matching. The behavior engine's
+    // classify_intent runs regex matching on this string for every request.
+    const MAX_INTENT_LEN: usize = 512;
+    if req.declared_intent.len() > MAX_INTENT_LEN {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: format!("declared_intent exceeds maximum length of {MAX_INTENT_LEN} bytes"),
+            }),
+        )
+            .into_response();
+    }
+
     // P1: Validate rate_limit_window_secs bounds to prevent rate limit bypass.
     // A window of 0 disables rate limiting entirely; a window of 1 second converts
     // "per minute" limits into "per second" (100x amplification).
@@ -762,6 +810,7 @@ pub async fn create_session(
         delegation_chain_snapshot: req.delegation_chain_snapshot,
         declared_intent: req.declared_intent,
         authorized_tools: req.authorized_tools,
+        authorized_credentials: req.authorized_credentials.unwrap_or_default(),
         time_limit: chrono::Duration::seconds(req.time_limit_secs),
         call_budget: req.call_budget,
         rate_limit_per_minute: req.rate_limit_per_minute,
@@ -780,7 +829,8 @@ pub async fn create_session(
         Json(CreateSessionResponse {
             session_id: session.session_id,
             declared_intent: session.declared_intent,
-            authorized_tools: session.authorized_tools,
+            authorized_tools: session.authorized_tools.clone(),
+            authorized_credentials: session.authorized_credentials,
             call_budget: session.call_budget,
             time_limit_secs: req.time_limit_secs,
         }),
@@ -794,12 +844,13 @@ pub async fn get_session(
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log("get_session", None, &format!("session_id={}", id));
 
@@ -809,7 +860,7 @@ pub async fn get_session(
             return (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    error: e.to_string(),
+                    error: "internal error".into(),
                 }),
             )
                 .into_response();
@@ -856,7 +907,8 @@ pub async fn get_session(
             agent_id: session.agent_id,
             status: status_str,
             declared_intent: session.declared_intent,
-            authorized_tools: session.authorized_tools,
+            authorized_tools: session.authorized_tools.clone(),
+            authorized_credentials: session.authorized_credentials,
             calls_made: session.calls_made,
             call_budget: session.call_budget,
             calls_remaining,
@@ -894,12 +946,13 @@ pub async fn close_session(
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log("close_session", None, &format!("session_id={}", id));
 
@@ -917,7 +970,7 @@ pub async fn close_session(
             return (
                 status,
                 Json(ErrorResponse {
-                    error: e.to_string(),
+                    error: "internal error".into(),
                 }),
             )
                 .into_response();
@@ -988,12 +1041,13 @@ pub async fn explain_policy(
     headers: HeaderMap,
     Json(req): Json<PolicyExplainRequest>,
 ) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log(
         "explain_policy",
@@ -1084,12 +1138,13 @@ pub async fn validate_policy(
     headers: HeaderMap,
     Json(req): Json<PolicyValidateRequest>,
 ) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log("validate_policy", None, "");
 
@@ -1099,12 +1154,13 @@ pub async fn validate_policy(
 
 /// POST /policy/reload: re-read the policy file and atomically swap the config.
 pub async fn reload_policy(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log("reload_policy", None, "");
 
@@ -1167,7 +1223,6 @@ pub async fn reload_policy(State(state): State<AppState>, headers: HeaderMap) ->
             "reloaded": true,
             "policies_loaded": policy_count,
             "policy_count": policy_count,
-            "file": path,
         })),
     )
         .into_response()
@@ -1175,12 +1230,13 @@ pub async fn reload_policy(State(state): State<AppState>, headers: HeaderMap) ->
 
 /// GET /policy/schema: returns the policy TOML schema as JSON Schema.
 pub async fn policy_schema(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    if let Err(e) = check_admin_rate_limit(&state, &headers) {
+        return e.into_response();
+    }
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-    if let Err(e) = check_admin_rate_limit(&state) {
-        return e.into_response();
-    }
+
 
     state.admin_audit_log("policy_schema", None, "");
 

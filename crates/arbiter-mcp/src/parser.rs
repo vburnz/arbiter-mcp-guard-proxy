@@ -55,10 +55,37 @@ pub fn parse_mcp_body(body: &[u8]) -> ParseResult {
     match &json_value {
         // Batch request (JSON array).
         serde_json::Value::Array(arr) => {
+            // Cap batch size to prevent a single HTTP request from triggering
+            // unbounded policy evaluations and audit entries.
+            const MAX_BATCH_SIZE: usize = 100;
+            if arr.len() > MAX_BATCH_SIZE {
+                tracing::warn!(
+                    batch_size = arr.len(),
+                    max = MAX_BATCH_SIZE,
+                    "batch exceeds maximum size, treating as NonMcp"
+                );
+                return ParseResult::NonMcp;
+            }
+
             let mut requests = Vec::new();
+            let mut _has_jsonrpc_items = false;
             for item in arr {
+                // Check if the item looks like a JSON-RPC attempt (has a "jsonrpc" field).
+                let looks_like_jsonrpc = item.get("jsonrpc").is_some() || item.get("method").is_some();
+                if looks_like_jsonrpc {
+                    _has_jsonrpc_items = true;
+                }
                 if let Some(mcp_req) = try_parse_single(item) {
                     requests.push(mcp_req);
+                } else if looks_like_jsonrpc {
+                    // An item that looks like JSON-RPC but failed parsing must
+                    // cause the entire batch to be rejected. Otherwise the raw
+                    // body (containing the unparsed item) would be forwarded to
+                    // the upstream while policy only evaluated the parsed subset.
+                    tracing::warn!(
+                        "batch contains unparseable JSON-RPC item; rejecting entire batch"
+                    );
+                    return ParseResult::NonMcp;
                 }
             }
             if requests.is_empty() {
@@ -72,7 +99,18 @@ pub fn parse_mcp_body(body: &[u8]) -> ParseResult {
             Some(mcp_req) => ParseResult::Mcp(McpContext {
                 requests: vec![mcp_req],
             }),
-            None => ParseResult::NonMcp,
+            None => {
+                // If the body contains a "jsonrpc" or "method" field, it's an
+                // attempted JSON-RPC request that failed validation. Treat it
+                // as NonMcp so the handler's NonMcp-with-policies check denies
+                // it rather than silently passing it through.
+                let looks_like_jsonrpc = json_value.get("jsonrpc").is_some()
+                    || json_value.get("method").is_some();
+                if looks_like_jsonrpc {
+                    tracing::warn!("malformed JSON-RPC detected: has jsonrpc/method field but failed validation");
+                }
+                ParseResult::NonMcp
+            }
         },
         // Anything else is not JSON-RPC.
         _ => ParseResult::NonMcp,
@@ -89,12 +127,62 @@ fn is_valid_tool_name(name: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '/' | ':'))
 }
 
+/// Allowed MCP method strings. Requests with methods not in this list
+/// are rejected at parse time rather than forwarded opaquely.
+const ALLOWED_MCP_METHODS: &[&str] = &[
+    "tools/call",
+    "tools/list",
+    "resources/read",
+    "resources/list",
+    "resources/subscribe",
+    "resources/unsubscribe",
+    "prompts/get",
+    "prompts/list",
+    "completion/complete",
+    "logging/setLevel",
+    "initialize",
+    "ping",
+    "notifications/initialized",
+    "notifications/cancelled",
+    "notifications/progress",
+    "notifications/roots/list_changed",
+    "notifications/resources/updated",
+    "notifications/resources/list_changed",
+    "notifications/tools/list_changed",
+    "notifications/prompts/list_changed",
+];
+
+/// Maximum size for tool arguments in bytes.
+const MAX_ARGUMENTS_SIZE: usize = 64 * 1024; // 64 KB
+
 /// Attempt to parse a single JSON value as a JSON-RPC 2.0 request and
 /// extract MCP-specific fields.
 fn try_parse_single(value: &serde_json::Value) -> Option<McpRequest> {
     let rpc: JsonRpcRequest = serde_json::from_value(value.clone()).ok()?;
 
     if !rpc.is_valid_version() {
+        return None;
+    }
+
+    // Validate id field: JSON-RPC 2.0 spec allows string, number, or null only.
+    // Reject arrays, objects, and oversized strings.
+    if let Some(ref id) = rpc.id {
+        match id {
+            serde_json::Value::String(s) if s.len() > 256 => {
+                tracing::warn!(len = s.len(), "JSON-RPC id string too long, rejecting");
+                return None;
+            }
+            serde_json::Value::String(_) | serde_json::Value::Number(_) | serde_json::Value::Null => {}
+            _ => {
+                tracing::warn!("JSON-RPC id must be string, number, or null; rejecting");
+                return None;
+            }
+        }
+    }
+
+    // Reject methods not in the MCP allowlist.
+    if !ALLOWED_MCP_METHODS.contains(&rpc.method.as_str()) {
+        tracing::warn!(method = %rpc.method, "rejected unknown MCP method");
         return None;
     }
 
@@ -110,12 +198,36 @@ fn try_parse_single(value: &serde_json::Value) -> Option<McpRequest> {
                 .and_then(|v| v.as_str())
                 .filter(|name| is_valid_tool_name(name))
                 .map(String::from);
-            arguments = params.get("arguments").cloned();
+
+            // Bound arguments size to prevent memory exhaustion.
+            if let Some(args) = params.get("arguments") {
+                let size = args.to_string().len();
+                if size > MAX_ARGUMENTS_SIZE {
+                    tracing::warn!(size, max = MAX_ARGUMENTS_SIZE, "arguments exceed size limit, dropping");
+                } else {
+                    arguments = Some(args.clone());
+                }
+            }
         }
 
         // resources/read, resources/subscribe → extract uri
         if rpc.method == "resources/read" || rpc.method == "resources/subscribe" {
-            resource_uri = params.get("uri").and_then(|v| v.as_str()).map(String::from);
+            if let Some(uri_str) = params.get("uri").and_then(|v| v.as_str()) {
+                // Validate URI scheme: only https, http (for localhost), and custom app schemes.
+                // Block dangerous schemes (file://, data:, javascript:).
+                let is_safe = uri_str.starts_with("https://")
+                    || uri_str.starts_with("http://")
+                    || !uri_str.contains("://")  // relative URIs are ok
+                    || uri_str.starts_with("urn:");
+                let is_dangerous = uri_str.starts_with("file://")
+                    || uri_str.starts_with("data:")
+                    || uri_str.starts_with("javascript:");
+                if is_dangerous || (!is_safe && uri_str.len() > 2048) {
+                    tracing::warn!(uri = uri_str, "rejected dangerous or oversized resource_uri");
+                } else {
+                    resource_uri = Some(uri_str.to_string());
+                }
+            }
         }
     }
 
@@ -172,7 +284,7 @@ mod tests {
             "id": 2,
             "method": "resources/read",
             "params": {
-                "uri": "file:///workspace/README.md"
+                "uri": "https://api.example.com/workspace/README.md"
             }
         }))
         .unwrap();
@@ -184,7 +296,7 @@ mod tests {
                 assert_eq!(req.method, "resources/read");
                 assert_eq!(
                     req.resource_uri.as_deref(),
-                    Some("file:///workspace/README.md")
+                    Some("https://api.example.com/workspace/README.md")
                 );
                 assert!(req.tool_name.is_none());
             }
@@ -239,7 +351,7 @@ mod tests {
                 "id": 2,
                 "method": "resources/read",
                 "params": {
-                    "uri": "file:///data.csv"
+                    "uri": "https://api.example.com/data.csv"
                 }
             }
         ]))
@@ -251,14 +363,14 @@ mod tests {
                 assert_eq!(ctx.requests[0].tool_name.as_deref(), Some("tool_a"));
                 assert_eq!(
                     ctx.requests[1].resource_uri.as_deref(),
-                    Some("file:///data.csv")
+                    Some("https://api.example.com/data.csv")
                 );
                 // Test convenience methods.
                 assert!(ctx.has_tool_calls());
                 let tools: Vec<&str> = ctx.tool_names().collect();
                 assert_eq!(tools, vec!["tool_a"]);
                 let uris: Vec<&str> = ctx.resource_uris().collect();
-                assert_eq!(uris, vec!["file:///data.csv"]);
+                assert_eq!(uris, vec!["https://api.example.com/data.csv"]);
             }
             ParseResult::NonMcp => panic!("expected Mcp result for batch"),
         }

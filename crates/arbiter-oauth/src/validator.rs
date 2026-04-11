@@ -126,6 +126,11 @@ impl OAuthValidator {
             if issuer.config.audiences.is_empty() {
                 validation.set_audience::<&str>(&[]);
                 validation.validate_aud = false;
+                tracing::warn!(
+                    issuer = %issuer.config.name,
+                    "audience validation DISABLED for this issuer (audiences list is empty). \
+                     Set audiences in config to enforce audience checks."
+                );
             } else {
                 validation.set_audience(&issuer.config.audiences);
             }
