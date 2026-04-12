@@ -51,10 +51,7 @@ pub enum SessionError {
     /// Storage write-through failed after updating cache.
     /// The session state in the cache is ahead of durable storage.
     #[error("storage write-through failed")]
-    StorageWriteThrough {
-        session_id: Uuid,
-        detail: String,
-    },
+    StorageWriteThrough { session_id: Uuid, detail: String },
 
     /// The agent has reached the maximum number of concurrent active sessions.
     ///

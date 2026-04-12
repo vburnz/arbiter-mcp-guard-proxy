@@ -71,7 +71,8 @@ pub fn parse_mcp_body(body: &[u8]) -> ParseResult {
             let mut _has_jsonrpc_items = false;
             for item in arr {
                 // Check if the item looks like a JSON-RPC attempt (has a "jsonrpc" field).
-                let looks_like_jsonrpc = item.get("jsonrpc").is_some() || item.get("method").is_some();
+                let looks_like_jsonrpc =
+                    item.get("jsonrpc").is_some() || item.get("method").is_some();
                 if looks_like_jsonrpc {
                     _has_jsonrpc_items = true;
                 }
@@ -104,10 +105,12 @@ pub fn parse_mcp_body(body: &[u8]) -> ParseResult {
                 // attempted JSON-RPC request that failed validation. Treat it
                 // as NonMcp so the handler's NonMcp-with-policies check denies
                 // it rather than silently passing it through.
-                let looks_like_jsonrpc = json_value.get("jsonrpc").is_some()
-                    || json_value.get("method").is_some();
+                let looks_like_jsonrpc =
+                    json_value.get("jsonrpc").is_some() || json_value.get("method").is_some();
                 if looks_like_jsonrpc {
-                    tracing::warn!("malformed JSON-RPC detected: has jsonrpc/method field but failed validation");
+                    tracing::warn!(
+                        "malformed JSON-RPC detected: has jsonrpc/method field but failed validation"
+                    );
                 }
                 ParseResult::NonMcp
             }
@@ -172,7 +175,9 @@ fn try_parse_single(value: &serde_json::Value) -> Option<McpRequest> {
                 tracing::warn!(len = s.len(), "JSON-RPC id string too long, rejecting");
                 return None;
             }
-            serde_json::Value::String(_) | serde_json::Value::Number(_) | serde_json::Value::Null => {}
+            serde_json::Value::String(_)
+            | serde_json::Value::Number(_)
+            | serde_json::Value::Null => {}
             _ => {
                 tracing::warn!("JSON-RPC id must be string, number, or null; rejecting");
                 return None;
@@ -203,7 +208,11 @@ fn try_parse_single(value: &serde_json::Value) -> Option<McpRequest> {
             if let Some(args) = params.get("arguments") {
                 let size = args.to_string().len();
                 if size > MAX_ARGUMENTS_SIZE {
-                    tracing::warn!(size, max = MAX_ARGUMENTS_SIZE, "arguments exceed size limit, dropping");
+                    tracing::warn!(
+                        size,
+                        max = MAX_ARGUMENTS_SIZE,
+                        "arguments exceed size limit, dropping"
+                    );
                 } else {
                     arguments = Some(args.clone());
                 }
@@ -211,22 +220,25 @@ fn try_parse_single(value: &serde_json::Value) -> Option<McpRequest> {
         }
 
         // resources/read, resources/subscribe → extract uri
-        if rpc.method == "resources/read" || rpc.method == "resources/subscribe" {
-            if let Some(uri_str) = params.get("uri").and_then(|v| v.as_str()) {
-                // Validate URI scheme: only https, http (for localhost), and custom app schemes.
-                // Block dangerous schemes (file://, data:, javascript:).
-                let is_safe = uri_str.starts_with("https://")
-                    || uri_str.starts_with("http://")
-                    || !uri_str.contains("://")  // relative URIs are ok
-                    || uri_str.starts_with("urn:");
-                let is_dangerous = uri_str.starts_with("file://")
-                    || uri_str.starts_with("data:")
-                    || uri_str.starts_with("javascript:");
-                if is_dangerous || (!is_safe && uri_str.len() > 2048) {
-                    tracing::warn!(uri = uri_str, "rejected dangerous or oversized resource_uri");
-                } else {
-                    resource_uri = Some(uri_str.to_string());
-                }
+        if (rpc.method == "resources/read" || rpc.method == "resources/subscribe")
+            && let Some(uri_str) = params.get("uri").and_then(|v| v.as_str())
+        {
+            // Validate URI scheme: only https, http (for localhost), and custom app schemes.
+            // Block dangerous schemes (file://, data:, javascript:).
+            let is_safe = uri_str.starts_with("https://")
+                || uri_str.starts_with("http://")
+                || !uri_str.contains("://")  // relative URIs are ok
+                || uri_str.starts_with("urn:");
+            let is_dangerous = uri_str.starts_with("file://")
+                || uri_str.starts_with("data:")
+                || uri_str.starts_with("javascript:");
+            if is_dangerous || (!is_safe && uri_str.len() > 2048) {
+                tracing::warn!(
+                    uri = uri_str,
+                    "rejected dangerous or oversized resource_uri"
+                );
+            } else {
+                resource_uri = Some(uri_str.to_string());
             }
         }
     }

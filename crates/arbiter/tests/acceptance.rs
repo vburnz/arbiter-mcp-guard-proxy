@@ -1336,7 +1336,10 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
         let status = resp.status().as_u16();
         if status == 403 {
             // This is the call that triggered trust demotion -- expected after threshold.
-            tracing::info!(call = i + 1, "trust demotion triggered, request aborted as expected");
+            tracing::info!(
+                call = i + 1,
+                "trust demotion triggered, request aborted as expected"
+            );
             break;
         }
         assert_eq!(

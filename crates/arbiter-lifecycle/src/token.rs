@@ -177,7 +177,10 @@ mod tests {
         let config = TokenConfig::default();
         let agent_id = Uuid::new_v4();
         let result = issue_token(agent_id, "user:alice", &config);
-        assert!(result.is_err(), "default config with empty secret must reject token issuance");
+        assert!(
+            result.is_err(),
+            "default config with empty secret must reject token issuance"
+        );
     }
 
     #[test]

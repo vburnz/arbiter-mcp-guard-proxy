@@ -479,37 +479,61 @@ pub async fn handle_request(
             // validate the session even for non-POST methods. This prevents
             // non-POST requests from bypassing session expiry, budget, and
             // agent-binding checks.
-            if state.require_session && !session_id_header.is_empty() {
-                if let Some(sid) = arbiter_session::parse_session_header(&session_id_header) {
-                    let agent_uuid = agent_id_header.parse::<uuid::Uuid>().ok();
-                    match state.session_store.get(sid).await {
-                        Ok(session) => {
-                            if session.is_expired() {
-                                return Ok(deny(
-                                    &state, capture, request_id, request_start,
-                                    StatusCode::REQUEST_TIMEOUT, None,
-                                    ArbiterError::session_error(&arbiter_session::SessionError::Expired(sid)),
-                                ).await);
-                            }
-                            if let Some(aid) = agent_uuid {
-                                if aid != session.agent_id {
-                                    return Ok(deny(
-                                        &state, capture, request_id, request_start,
-                                        StatusCode::FORBIDDEN, None,
-                                        ArbiterError::session_error(&arbiter_session::SessionError::AgentMismatch {
-                                            session_id: sid, expected: session.agent_id, actual: aid,
-                                        }),
-                                    ).await);
-                                }
-                            }
-                        }
-                        Err(_) => {
+            if state.require_session
+                && !session_id_header.is_empty()
+                && let Some(sid) = arbiter_session::parse_session_header(&session_id_header)
+            {
+                let agent_uuid = agent_id_header.parse::<uuid::Uuid>().ok();
+                match state.session_store.get(sid).await {
+                    Ok(session) => {
+                        if session.is_expired() {
                             return Ok(deny(
-                                &state, capture, request_id, request_start,
-                                StatusCode::NOT_FOUND, None,
-                                ArbiterError::session_error(&arbiter_session::SessionError::NotFound(sid)),
-                            ).await);
+                                &state,
+                                capture,
+                                request_id,
+                                request_start,
+                                StatusCode::REQUEST_TIMEOUT,
+                                None,
+                                ArbiterError::session_error(
+                                    &arbiter_session::SessionError::Expired(sid),
+                                ),
+                            )
+                            .await);
                         }
+                        if let Some(aid) = agent_uuid
+                            && aid != session.agent_id
+                        {
+                            return Ok(deny(
+                                &state,
+                                capture,
+                                request_id,
+                                request_start,
+                                StatusCode::FORBIDDEN,
+                                None,
+                                ArbiterError::session_error(
+                                    &arbiter_session::SessionError::AgentMismatch {
+                                        session_id: sid,
+                                        expected: session.agent_id,
+                                        actual: aid,
+                                    },
+                                ),
+                            )
+                            .await);
+                        }
+                    }
+                    Err(_) => {
+                        return Ok(deny(
+                            &state,
+                            capture,
+                            request_id,
+                            request_start,
+                            StatusCode::NOT_FOUND,
+                            None,
+                            ArbiterError::session_error(&arbiter_session::SessionError::NotFound(
+                                sid,
+                            )),
+                        )
+                        .await);
                     }
                 }
             }
@@ -521,40 +545,40 @@ pub async fn handle_request(
         }
     }
 
-    if let ParseResult::NonMcp = &mcp_context {
-        if method == "POST" {
-            if state.strict_mcp {
-                tracing::warn!("non-MCP POST body rejected in strict mode");
-                return Ok(deny(
-                    &state,
-                    capture,
-                    request_id,
-                    request_start,
-                    StatusCode::FORBIDDEN,
-                    None,
-                    ArbiterError::non_mcp_rejected(),
-                )
-                .await);
-            }
-            // Even in non-strict mode, if policies are configured, NonMcp POST
-            // traffic must be denied. Otherwise an attacker can wrap a forbidden
-            // tool call in slightly malformed JSON-RPC to bypass all policy eval.
-            if (*state.policy_config.borrow()).is_some() {
-                tracing::warn!(
-                    "non-MCP POST body denied: policies are configured but body \
-                     is not valid JSON-RPC; cannot evaluate authorization"
-                );
-                return Ok(deny(
-                    &state,
-                    capture,
-                    request_id,
-                    request_start,
-                    StatusCode::FORBIDDEN,
-                    None,
-                    ArbiterError::non_mcp_rejected(),
-                )
-                .await);
-            }
+    if let ParseResult::NonMcp = &mcp_context
+        && method == "POST"
+    {
+        if state.strict_mcp {
+            tracing::warn!("non-MCP POST body rejected in strict mode");
+            return Ok(deny(
+                &state,
+                capture,
+                request_id,
+                request_start,
+                StatusCode::FORBIDDEN,
+                None,
+                ArbiterError::non_mcp_rejected(),
+            )
+            .await);
+        }
+        // Even in non-strict mode, if policies are configured, NonMcp POST
+        // traffic must be denied. Otherwise an attacker can wrap a forbidden
+        // tool call in slightly malformed JSON-RPC to bypass all policy eval.
+        if (*state.policy_config.borrow()).is_some() {
+            tracing::warn!(
+                "non-MCP POST body denied: policies are configured but body \
+                 is not valid JSON-RPC; cannot evaluate authorization"
+            );
+            return Ok(deny(
+                &state,
+                capture,
+                request_id,
+                request_start,
+                StatusCode::FORBIDDEN,
+                None,
+                ArbiterError::non_mcp_rejected(),
+            )
+            .await);
         }
     }
 
@@ -722,7 +746,13 @@ pub async fn handle_request(
             status,
             policy_matched,
             error,
-        } = validate_session_tools(&state.session_store, session_id, Some(header_agent_id), &ctx.requests).await
+        } = validate_session_tools(
+            &state.session_store,
+            session_id,
+            Some(header_agent_id),
+            &ctx.requests,
+        )
+        .await
         {
             return Ok(deny(
                 &state,
@@ -739,7 +769,7 @@ pub async fn handle_request(
         // Use the session's delegation chain snapshot for audit instead of
         // the client-supplied header, which is advisory and unverified.
         if !session.delegation_chain_snapshot.is_empty() {
-            capture.set_delegation_chain(&session.delegation_chain_snapshot.join(","));
+            capture.set_delegation_chain(session.delegation_chain_snapshot.join(","));
         }
 
         Some(session)
@@ -988,7 +1018,7 @@ pub async fn handle_request(
                                 StatusCode::FORBIDDEN,
                                 None,
                                 ArbiterError::behavioral_anomaly(
-                                    "request aborted: agent trust level demoted"
+                                    "request aborted: agent trust level demoted",
                                 ),
                             )
                             .await);
@@ -1034,8 +1064,9 @@ pub async fn handle_request(
     // client sending a non-POST request with ${CRED:ref} patterns would receive
     // resolved secrets with no authorization check.
     let mut injected_secrets: Vec<secrecy::SecretString> = Vec::new();
-    let body_bytes = if fetched_session.is_some() && state.credential_provider.is_some() {
-        let provider = state.credential_provider.as_ref().unwrap();
+    let body_bytes = if let (Some(_session), Some(provider)) =
+        (fetched_session.as_ref(), state.credential_provider.as_ref())
+    {
         // Reject non-UTF-8 request bodies when credential injection is active.
         // Previously used from_utf8_lossy, which could break ${CRED:ref} patterns spanning
         // invalid UTF-8 boundaries, causing literal credential reference patterns to be forwarded

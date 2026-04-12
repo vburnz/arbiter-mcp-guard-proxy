@@ -111,7 +111,10 @@ pub fn evaluate_explained(
     let mut trace = Vec::new();
 
     let mut matching: Vec<(&Policy, i32)> = Vec::new();
-    let trace_tool = request.tool_name.clone().unwrap_or_else(|| request.method.clone());
+    let trace_tool = request
+        .tool_name
+        .clone()
+        .unwrap_or_else(|| request.method.clone());
     let trace_agent = ctx.agent.id.to_string();
     let trace_principal = ctx.principal_sub.clone();
     let trace_ts = chrono::Utc::now();
@@ -147,10 +150,7 @@ pub fn evaluate_explained(
     // chain. This prevents a delegated sub-agent from exceeding the scope
     // granted by its delegation links, regardless of what policies allow.
     if !ctx.delegation_chain.is_empty() {
-        let tool_name = request
-            .tool_name
-            .as_deref()
-            .unwrap_or(&request.method);
+        let tool_name = request.tool_name.as_deref().unwrap_or(&request.method);
 
         for link in &ctx.delegation_chain {
             if !link.scope_narrowing.is_empty()
@@ -165,10 +165,7 @@ pub fn evaluate_explained(
                 );
                 return EvalResult {
                     decision: Decision::Deny {
-                        reason: format!(
-                            "tool '{}' not in delegation scope narrowing",
-                            tool_name
-                        ),
+                        reason: format!("tool '{}' not in delegation scope narrowing", tool_name),
                     },
                     trace,
                 };
@@ -398,7 +395,10 @@ fn matches_resource_uri(policy: &Policy, request: &McpRequest) -> bool {
         return true;
     }
     match &request.resource_uri {
-        Some(uri) => policy.resource_match.iter().any(|prefix| uri.starts_with(prefix)),
+        Some(uri) => policy
+            .resource_match
+            .iter()
+            .any(|prefix| uri.starts_with(prefix)),
         // No resource_uri on the request but policy has resource_match set:
         // the policy requires a specific URI pattern, so this doesn't match.
         None => false,
@@ -408,7 +408,10 @@ fn matches_resource_uri(policy: &Policy, request: &McpRequest) -> bool {
 /// Check parameter constraints against request arguments.
 /// Traverse a dot-separated key path into a JSON value.
 /// e.g., "arguments.max_tokens" traverses into {"arguments": {"max_tokens": 5000}}.
-fn traverse_dot_path<'a>(value: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::Value> {
+fn traverse_dot_path<'a>(
+    value: &'a serde_json::Value,
+    path: &str,
+) -> Option<&'a serde_json::Value> {
     let mut current = value;
     for segment in path.split('.') {
         current = current.get(segment)?;
@@ -658,7 +661,7 @@ mod tests {
                     },
                     allowed_tools: vec!["read_file".into()],
                     resource_match: vec![],
-                parameter_constraints: vec![],
+                    parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -676,7 +679,7 @@ mod tests {
                     },
                     allowed_tools: vec!["write_file".into()],
                     resource_match: vec![],
-                parameter_constraints: vec![],
+                    parameter_constraints: vec![],
                     effect: Effect::Escalate,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -761,7 +764,7 @@ mod tests {
                     intent_match: Default::default(),
                     allowed_tools: vec!["admin_tool".into()],
                     resource_match: vec![],
-                parameter_constraints: vec![],
+                    parameter_constraints: vec![],
                     effect: Effect::Deny,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -776,7 +779,7 @@ mod tests {
                     intent_match: Default::default(),
                     allowed_tools: vec!["admin_tool".into()],
                     resource_match: vec![],
-                parameter_constraints: vec![],
+                    parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -847,7 +850,7 @@ mod tests {
                     intent_match: Default::default(),
                     allowed_tools: vec!["read_file".into(), "list_dir".into()],
                     resource_match: vec![],
-                parameter_constraints: vec![],
+                    parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -859,7 +862,7 @@ mod tests {
                     intent_match: Default::default(),
                     allowed_tools: vec!["read_file".into(), "search".into()],
                     resource_match: vec![],
-                parameter_constraints: vec![],
+                    parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -871,7 +874,7 @@ mod tests {
                     intent_match: Default::default(),
                     allowed_tools: vec!["delete_file".into()],
                     resource_match: vec![],
-                parameter_constraints: vec![],
+                    parameter_constraints: vec![],
                     effect: Effect::Deny,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -1304,7 +1307,7 @@ mod tests {
                     intent_match: Default::default(),
                     allowed_tools: vec![],
                     resource_match: vec![],
-                parameter_constraints: vec![],
+                    parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -1319,7 +1322,7 @@ mod tests {
                     intent_match: Default::default(),
                     allowed_tools: vec![],
                     resource_match: vec![],
-                parameter_constraints: vec![],
+                    parameter_constraints: vec![],
                     effect: Effect::Deny,
                     disposition: Disposition::Block,
                     priority: 0,
@@ -1690,7 +1693,7 @@ mod tests {
                     intent_match: Default::default(),
                     allowed_tools: vec![], // empty = wildcard, matches everything
                     resource_match: vec![],
-                parameter_constraints: vec![],
+                    parameter_constraints: vec![],
                     effect: Effect::Allow,
                     disposition: Disposition::Block,
                     priority: 10, // low priority
@@ -1703,7 +1706,7 @@ mod tests {
                     intent_match: Default::default(),
                     allowed_tools: vec!["delete_file".into()],
                     resource_match: vec![],
-                parameter_constraints: vec![],
+                    parameter_constraints: vec![],
                     effect: Effect::Deny,
                     disposition: Disposition::Block,
                     priority: 100, // high priority

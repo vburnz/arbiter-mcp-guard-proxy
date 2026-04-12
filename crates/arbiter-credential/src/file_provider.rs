@@ -22,7 +22,10 @@ struct CredentialFile {
 impl std::fmt::Debug for CredentialFile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CredentialFile")
-            .field("credentials", &format!("{} entries", self.credentials.len()))
+            .field(
+                "credentials",
+                &format!("{} entries", self.credentials.len()),
+            )
             .finish()
     }
 }
@@ -100,10 +103,7 @@ impl FileProvider {
                 ))
             })?;
         let parsed: CredentialFile = toml::from_str(&contents).map_err(|e| {
-            CredentialError::ProviderError(format!(
-                "parsing {}: {e}",
-                self.source_path.display()
-            ))
+            CredentialError::ProviderError(format!("parsing {}: {e}", self.source_path.display()))
         })?;
         let new_creds: HashMap<String, SecretString> = parsed
             .credentials

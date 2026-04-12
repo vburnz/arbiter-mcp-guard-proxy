@@ -146,36 +146,32 @@ impl FieldEncryptor {
         // Detect versioned vs legacy format.
         // Versioned: version_1 || nonce_12 || ciphertext (min 14 bytes)
         // Legacy:    nonce_12 || ciphertext (min 13 bytes, first byte is random nonce)
-        let (nonce_bytes, ciphertext) = if !combined.is_empty() && combined[0] == CURRENT_KEY_VERSION && combined.len() >= 14 {
-            // Versioned format: skip the version byte.
-            (&combined[1..13], &combined[13..])
-        } else if combined.len() >= 13 {
-            // Legacy format (no version prefix): nonce starts at offset 0.
-            (&combined[..12], &combined[12..])
-        } else {
-            return Err(EncryptionError::InvalidCiphertext(
-                "ciphertext too short".into(),
-            ));
-        };
+        let (nonce_bytes, ciphertext) =
+            if !combined.is_empty() && combined[0] == CURRENT_KEY_VERSION && combined.len() >= 14 {
+                // Versioned format: skip the version byte.
+                (&combined[1..13], &combined[13..])
+            } else if combined.len() >= 13 {
+                // Legacy format (no version prefix): nonce starts at offset 0.
+                (&combined[..12], &combined[12..])
+            } else {
+                return Err(EncryptionError::InvalidCiphertext(
+                    "ciphertext too short".into(),
+                ));
+            };
 
         let nonce = Nonce::from_slice(nonce_bytes);
 
         // Try current key first.
         match self.cipher.decrypt(nonce, ciphertext) {
-            Ok(plaintext) => {
-                return String::from_utf8(plaintext)
-                    .map_err(|e| EncryptionError::DecryptionFailed(e.to_string()));
-            }
+            Ok(plaintext) => String::from_utf8(plaintext)
+                .map_err(|e| EncryptionError::DecryptionFailed(e.to_string())),
             Err(current_err) => {
                 // If a previous key is configured, try it (key rotation support).
-                if let Some(ref prev) = self.previous_cipher {
-                    match prev.decrypt(nonce, ciphertext) {
-                        Ok(plaintext) => {
-                            return String::from_utf8(plaintext)
-                                .map_err(|e| EncryptionError::DecryptionFailed(e.to_string()));
-                        }
-                        Err(_) => {}
-                    }
+                if let Some(ref prev) = self.previous_cipher
+                    && let Ok(plaintext) = prev.decrypt(nonce, ciphertext)
+                {
+                    return String::from_utf8(plaintext)
+                        .map_err(|e| EncryptionError::DecryptionFailed(e.to_string()));
                 }
                 Err(EncryptionError::DecryptionFailed(current_err.to_string()))
             }

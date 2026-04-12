@@ -17,7 +17,8 @@ pub fn detect_behavioral_anomalies(
     for mcp_req in requests {
         let tool = mcp_req.tool_name.as_deref().unwrap_or(&mcp_req.method);
         let op_type = classify_operation(&mcp_req.method, mcp_req.tool_name.as_deref());
-        let anomaly = detector.detect_with_args(declared_intent, op_type, tool, mcp_req.arguments.as_ref());
+        let anomaly =
+            detector.detect_with_args(declared_intent, op_type, tool, mcp_req.arguments.as_ref());
         match &anomaly {
             AnomalyResponse::Normal => {}
             AnomalyResponse::Flagged { reason } => {

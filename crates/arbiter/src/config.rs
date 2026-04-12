@@ -776,9 +776,7 @@ impl ArbiterConfig {
 
         // Warn when credential injection is enabled with an HTTP (not HTTPS) upstream.
         // Credentials injected over plaintext HTTP are visible to network observers.
-        if self.credentials.is_some()
-            && self.proxy.upstream_url.starts_with("http://")
-        {
+        if self.credentials.is_some() && self.proxy.upstream_url.starts_with("http://") {
             warnings.push(ConfigWarning::Warn(
                 "[proxy] upstream_url uses HTTP with [credentials] enabled; \
                  injected secrets will be transmitted in plaintext. \

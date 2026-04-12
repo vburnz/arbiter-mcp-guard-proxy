@@ -151,8 +151,7 @@ impl AuditSink {
             // chain_record_hash is computed over the entry WITH sequence and prev_hash
             // but WITHOUT the record_hash itself.
             chained_entry.chain_record_hash = None;
-            let pre_hash_json = serde_json::to_string(&chained_entry)
-                .unwrap_or_default();
+            let pre_hash_json = serde_json::to_string(&chained_entry).unwrap_or_default();
             let record_hash = blake3::hash(pre_hash_json.as_bytes()).to_hex().to_string();
             chained_entry.chain_record_hash = Some(record_hash.clone());
             chain.prev_hash = record_hash;

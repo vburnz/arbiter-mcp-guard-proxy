@@ -158,14 +158,14 @@ impl SessionStore {
             .ok_or(SessionError::NotFound(session_id))?;
 
         // Verify agent binding to prevent session fixation.
-        if let Some(agent_id) = requesting_agent_id {
-            if agent_id != session.agent_id {
-                return Err(SessionError::AgentMismatch {
-                    session_id,
-                    expected: session.agent_id,
-                    actual: agent_id,
-                });
-            }
+        if let Some(agent_id) = requesting_agent_id
+            && agent_id != session.agent_id
+        {
+            return Err(SessionError::AgentMismatch {
+                session_id,
+                expected: session.agent_id,
+                actual: agent_id,
+            });
         }
 
         if session.status == SessionStatus::Closed {
@@ -235,14 +235,14 @@ impl SessionStore {
             .ok_or(SessionError::NotFound(session_id))?;
 
         // Verify agent binding to prevent session fixation.
-        if let Some(agent_id) = requesting_agent_id {
-            if agent_id != session.agent_id {
-                return Err(SessionError::AgentMismatch {
-                    session_id,
-                    expected: session.agent_id,
-                    actual: agent_id,
-                });
-            }
+        if let Some(agent_id) = requesting_agent_id
+            && agent_id != session.agent_id
+        {
+            return Err(SessionError::AgentMismatch {
+                session_id,
+                expected: session.agent_id,
+                actual: agent_id,
+            });
         }
 
         if session.status == SessionStatus::Closed {
@@ -476,7 +476,9 @@ mod tests {
             .unwrap();
 
         // Third call should fail.
-        let result = store.use_session(session.session_id, "read_file", None).await;
+        let result = store
+            .use_session(session.session_id, "read_file", None)
+            .await;
         assert!(matches!(result, Err(SessionError::BudgetExceeded { .. })));
     }
 
@@ -492,7 +494,9 @@ mod tests {
             .unwrap();
 
         // Unauthorized tool is rejected.
-        let result = store.use_session(session.session_id, "delete_file", None).await;
+        let result = store
+            .use_session(session.session_id, "delete_file", None)
+            .await;
         assert!(matches!(
             result,
             Err(SessionError::ToolNotAuthorized { .. })
@@ -511,7 +515,9 @@ mod tests {
         // Wait for the session to expire.
         tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
 
-        let result = store.use_session(session.session_id, "read_file", None).await;
+        let result = store
+            .use_session(session.session_id, "read_file", None)
+            .await;
         assert!(matches!(result, Err(SessionError::Expired(_))));
     }
 
@@ -522,7 +528,9 @@ mod tests {
 
         store.close(session.session_id).await.unwrap();
 
-        let result = store.use_session(session.session_id, "read_file", None).await;
+        let result = store
+            .use_session(session.session_id, "read_file", None)
+            .await;
         assert!(matches!(result, Err(SessionError::AlreadyClosed(_))));
     }
 
@@ -577,7 +585,9 @@ mod tests {
             .unwrap();
 
         // 4th call hits rate limit.
-        let result = store.use_session(session.session_id, "read_file", None).await;
+        let result = store
+            .use_session(session.session_id, "read_file", None)
+            .await;
         assert!(
             matches!(result, Err(SessionError::RateLimited { .. })),
             "expected RateLimited, got {result:?}"
@@ -721,7 +731,9 @@ mod tests {
         req.call_budget = 0;
         let session = store.create(req).await;
 
-        let result = store.use_session(session.session_id, "read_file", None).await;
+        let result = store
+            .use_session(session.session_id, "read_file", None)
+            .await;
         assert!(
             matches!(result, Err(SessionError::BudgetExceeded { .. })),
             "zero-budget session must reject the first call, got {result:?}"

@@ -266,7 +266,7 @@ fn multi_issuer_selects_correct_one() {
                 introspection_url: None,
                 client_id: None,
                 client_secret: None,
-            allowed_redirect_uris: vec![],
+                allowed_redirect_uris: vec![],
             },
             IssuerConfig {
                 name: "issuer-2".to_string(),
@@ -276,7 +276,7 @@ fn multi_issuer_selects_correct_one() {
                 introspection_url: None,
                 client_id: None,
                 client_secret: None,
-            allowed_redirect_uris: vec![],
+                allowed_redirect_uris: vec![],
             },
         ],
         jwks_cache_ttl_secs: 3600,
