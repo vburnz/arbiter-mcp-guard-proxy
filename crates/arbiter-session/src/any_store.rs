@@ -41,8 +41,14 @@ impl AnySessionStore {
         requesting_agent_id: Option<uuid::Uuid>,
     ) -> Result<TaskSession, SessionError> {
         match self {
-            AnySessionStore::InMemory(s) => s.use_session(session_id, tool_name, requesting_agent_id).await,
-            AnySessionStore::StorageBacked(s) => s.use_session(session_id, tool_name, requesting_agent_id).await,
+            AnySessionStore::InMemory(s) => {
+                s.use_session(session_id, tool_name, requesting_agent_id)
+                    .await
+            }
+            AnySessionStore::StorageBacked(s) => {
+                s.use_session(session_id, tool_name, requesting_agent_id)
+                    .await
+            }
         }
     }
 
@@ -58,8 +64,14 @@ impl AnySessionStore {
         requesting_agent_id: Option<uuid::Uuid>,
     ) -> Result<TaskSession, SessionError> {
         match self {
-            AnySessionStore::InMemory(s) => s.use_session_batch(session_id, tool_names, requesting_agent_id).await,
-            AnySessionStore::StorageBacked(s) => s.use_session_batch(session_id, tool_names, requesting_agent_id).await,
+            AnySessionStore::InMemory(s) => {
+                s.use_session_batch(session_id, tool_names, requesting_agent_id)
+                    .await
+            }
+            AnySessionStore::StorageBacked(s) => {
+                s.use_session_batch(session_id, tool_names, requesting_agent_id)
+                    .await
+            }
         }
     }
 
@@ -168,7 +180,9 @@ mod tests {
         assert_eq!(closed.status, crate::model::SessionStatus::Closed);
 
         // Use after close should fail.
-        let err = store.use_session(session.session_id, "read_file", None).await;
+        let err = store
+            .use_session(session.session_id, "read_file", None)
+            .await;
         assert!(matches!(err, Err(SessionError::AlreadyClosed(_))));
     }
 }

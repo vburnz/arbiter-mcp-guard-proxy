@@ -48,7 +48,10 @@ impl std::fmt::Debug for InjectedRequest {
             .field("body", &"[REDACTED]")
             .field("headers", &format!("{} entries", self.headers.len()))
             .field("resolved_refs", &self.resolved_refs)
-            .field("resolved_values", &format!("{} secrets", self.resolved_values.len()))
+            .field(
+                "resolved_values",
+                &format!("{} secrets", self.resolved_values.len()),
+            )
             .finish()
     }
 }
@@ -125,7 +128,10 @@ pub fn scrub_response(body: &str, known_values: &[SecretString]) -> String {
 ///
 /// Backward-compatible entry point for callers that do not yet use
 /// [`SecretString`]. Prefer [`scrub_response`] with `SecretString` values.
-#[deprecated(since = "0.0.12", note = "use scrub_response with SecretString values instead")]
+#[deprecated(
+    since = "0.0.12",
+    note = "use scrub_response with SecretString values instead"
+)]
 pub fn scrub_response_plain(body: &str, known_values: &[String]) -> String {
     let mut sorted_values: Vec<&String> = known_values.iter().collect();
     sorted_values.sort_by_key(|v| std::cmp::Reverse(v.len()));
@@ -212,7 +218,9 @@ fn scrub_single_value(scrubbed: &mut String, value: &str) {
     // in HTML responses to evade direct string matching.
     let html_decimal = html_entity_encode_decimal(value);
     if scrubbed.contains(&html_decimal) {
-        warn!("HTML-entity-encoded (decimal) credential value detected in response body, scrubbing");
+        warn!(
+            "HTML-entity-encoded (decimal) credential value detected in response body, scrubbing"
+        );
         *scrubbed = scrubbed.replace(&html_decimal, REDACTED);
     }
     let html_hex = html_entity_encode_hex(value);

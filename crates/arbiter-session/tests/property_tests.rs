@@ -135,32 +135,6 @@ proptest! {
         })?;
     }
 
-    /// Session with minimum duration expires after 1 second.
-    #[test]
-    fn short_duration_session_is_expired(intent in intent_strategy()) {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        rt.block_on(async {
-            let store = SessionStore::new();
-            // Minimum duration is clamped to 1s; use that.
-            let req = make_request(&intent, vec![], 100, chrono::Duration::seconds(1));
-            let session = store.create(req).await;
-
-            // Wait for the session to expire.
-            tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
-
-            let result = store.use_session(session.session_id, "any_tool", None).await;
-            prop_assert!(
-                matches!(result, Err(SessionError::Expired(_))),
-                "expired session should return error, got: {:?}", result
-            );
-
-            Ok(())
-        })?;
-    }
-
     /// The TaskSession model's is_tool_authorized is consistent with the whitelist:
     /// if a tool is in authorized_tools, it is authorized; if not, it is not
     /// (unless authorized_tools is empty, meaning all tools are allowed).
@@ -226,4 +200,36 @@ proptest! {
             "empty authorized_tools should allow any tool, but '{}' was rejected", tool
         );
     }
+}
+
+#[test]
+fn short_duration_session_is_expired() {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        let store = SessionStore::new();
+        // Minimum duration is clamped to 1s; use that.
+        let req = make_request(
+            "short lived session",
+            vec![],
+            100,
+            chrono::Duration::seconds(1),
+        );
+        let session = store.create(req).await;
+
+        // Wait for the session to expire once rather than repeating this in
+        // many proptest cases, which is too slow under tarpaulin.
+        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+
+        let result = store
+            .use_session(session.session_id, "any_tool", None)
+            .await;
+        assert!(
+            matches!(result, Err(SessionError::Expired(_))),
+            "expired session should return error, got: {:?}",
+            result
+        );
+    });
 }

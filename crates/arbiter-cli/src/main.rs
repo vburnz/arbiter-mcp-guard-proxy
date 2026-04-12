@@ -195,7 +195,7 @@ async fn register_agent(
     // capture in stdout pipelines and log aggregators.
     let token = body["token"].as_str().unwrap_or("");
     if token.len() > 12 {
-        eprintln!("  Token: {}...{}", &token[..6], &token[token.len()-6..]);
+        eprintln!("  Token: {}...{}", &token[..6], &token[token.len() - 6..]);
     } else {
         eprintln!("  Token: {token}");
     }
@@ -760,7 +760,7 @@ fn detect_platform() -> Result<(&'static str, &'static str), String> {
 }
 
 fn verify_sha256(data: &[u8], filename: &str, checksums: &str) -> Result<(), String> {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
 
     let expected = checksums
         .lines()

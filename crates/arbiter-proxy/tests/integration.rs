@@ -72,7 +72,7 @@ async fn spawn_proxy(
         None, // no file-based audit sink in tests
         RedactionConfig::default(),
         metrics,
-        10 * 1024 * 1024, // 10 MB max body
+        10 * 1024 * 1024,                   // 10 MB max body
         std::time::Duration::from_secs(30), // 30s upstream timeout
     ));
 

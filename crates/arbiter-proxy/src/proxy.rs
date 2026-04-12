@@ -196,9 +196,13 @@ pub async fn handle_request(
     match upstream_result {
         Err(_elapsed) => {
             tracing::error!(timeout = ?state.upstream_timeout, "upstream request timed out");
-            state.metrics.observe_upstream_duration(upstream_start.elapsed().as_secs_f64());
+            state
+                .metrics
+                .observe_upstream_duration(upstream_start.elapsed().as_secs_f64());
             state.metrics.record_request("allow");
-            state.metrics.observe_request_duration(request_start.elapsed().as_secs_f64());
+            state
+                .metrics
+                .observe_request_duration(request_start.elapsed().as_secs_f64());
 
             let entry = capture.finalize(Some(504));
             if let Some(sink) = &state.audit_sink
@@ -207,16 +211,20 @@ pub async fn handle_request(
                 tracing::error!(error = %e, "failed to write audit entry");
             }
 
-            return Ok(Response::builder()
+            Ok(Response::builder()
                 .status(StatusCode::GATEWAY_TIMEOUT)
                 .body(Full::new(Bytes::from("Gateway Timeout")))
-                .expect("building static response cannot fail"));
+                .expect("building static response cannot fail"))
         }
         Ok(Err(e)) => {
-            state.metrics.observe_upstream_duration(upstream_start.elapsed().as_secs_f64());
+            state
+                .metrics
+                .observe_upstream_duration(upstream_start.elapsed().as_secs_f64());
             tracing::error!(error = %e, "upstream request failed");
             state.metrics.record_request("allow");
-            state.metrics.observe_request_duration(request_start.elapsed().as_secs_f64());
+            state
+                .metrics
+                .observe_request_duration(request_start.elapsed().as_secs_f64());
 
             let entry = capture.finalize(None);
             if let Some(sink) = &state.audit_sink
@@ -225,10 +233,10 @@ pub async fn handle_request(
                 tracing::error!(error = %e, "failed to write audit entry");
             }
 
-            return Ok(Response::builder()
+            Ok(Response::builder()
                 .status(StatusCode::BAD_GATEWAY)
                 .body(Full::new(Bytes::from("Bad Gateway")))
-                .expect("building static response cannot fail"));
+                .expect("building static response cannot fail"))
         }
         Ok(Ok(resp)) => {
             state
@@ -240,7 +248,10 @@ pub async fn handle_request(
             let body_bytes = match limited_body.collect().await {
                 Ok(collected) => collected.to_bytes(),
                 Err(_) => {
-                    tracing::error!(max = state.max_body_bytes, "upstream response body exceeded size limit");
+                    tracing::error!(
+                        max = state.max_body_bytes,
+                        "upstream response body exceeded size limit"
+                    );
                     let entry = capture.finalize(Some(502));
                     if let Some(sink) = &state.audit_sink
                         && let Err(e) = sink.write(&entry).await

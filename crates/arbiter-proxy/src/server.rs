@@ -17,9 +17,11 @@ use crate::proxy::{ProxyState, build_audit, handle_request};
 /// Run the proxy server. Blocks until a shutdown signal is received.
 pub async fn run(config: ProxyConfig) -> anyhow::Result<()> {
     // Validate upstream URL at startup, not at first request.
-    let upstream_uri: hyper::Uri = config.upstream.url.parse().map_err(|e| {
-        anyhow::anyhow!("invalid upstream URL '{}': {e}", config.upstream.url)
-    })?;
+    let upstream_uri: hyper::Uri = config
+        .upstream
+        .url
+        .parse()
+        .map_err(|e| anyhow::anyhow!("invalid upstream URL '{}': {e}", config.upstream.url))?;
     match upstream_uri.scheme_str() {
         Some("http") | Some("https") => {}
         Some(scheme) => {
@@ -29,7 +31,10 @@ pub async fn run(config: ProxyConfig) -> anyhow::Result<()> {
             );
         }
         None => {
-            anyhow::bail!("upstream URL '{}' has no scheme; use http:// or https://", config.upstream.url);
+            anyhow::bail!(
+                "upstream URL '{}' has no scheme; use http:// or https://",
+                config.upstream.url
+            );
         }
     }
 
@@ -59,13 +64,15 @@ pub async fn run(config: ProxyConfig) -> anyhow::Result<()> {
     let listener = TcpListener::bind(addr).await?;
     tracing::info!(%addr, upstream = %config.upstream.url, "proxy listening");
 
-    let header_read_timeout = std::time::Duration::from_secs(
-        config.server.header_read_timeout_secs,
-    );
+    let header_read_timeout =
+        std::time::Duration::from_secs(config.server.header_read_timeout_secs);
 
     // Connection concurrency limit to prevent resource exhaustion from connection floods.
     let connection_semaphore = Arc::new(tokio::sync::Semaphore::new(config.server.max_connections));
-    tracing::info!(max_connections = config.server.max_connections, "connection limit configured");
+    tracing::info!(
+        max_connections = config.server.max_connections,
+        "connection limit configured"
+    );
 
     let shutdown = shutdown_signal();
     tokio::pin!(shutdown);
@@ -77,7 +84,6 @@ pub async fn run(config: ProxyConfig) -> anyhow::Result<()> {
                 let state = Arc::clone(&state);
                 tracing::debug!(%remote_addr, "accepted connection");
 
-                let header_read_timeout = header_read_timeout;
                 let sem = Arc::clone(&connection_semaphore);
                 tokio::spawn(async move {
                     // Acquire a permit before serving; drop releases it.

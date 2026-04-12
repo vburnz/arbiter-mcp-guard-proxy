@@ -60,7 +60,10 @@ impl std::fmt::Debug for IssuerConfig {
             .field("audiences", &self.audiences)
             .field("introspection_url", &self.introspection_url)
             .field("client_id", &self.client_id)
-            .field("client_secret", &self.client_secret.as_ref().map(|_| "[REDACTED]"))
+            .field(
+                "client_secret",
+                &self.client_secret.as_ref().map(|_| "[REDACTED]"),
+            )
             .field("allowed_redirect_uris", &self.allowed_redirect_uris)
             .finish()
     }

@@ -44,7 +44,10 @@ impl McpRequest {
         if let Some(ref id) = self.id {
             obj.insert("id".into(), id.clone());
         }
-        obj.insert("method".into(), serde_json::Value::String(self.method.clone()));
+        obj.insert(
+            "method".into(),
+            serde_json::Value::String(self.method.clone()),
+        );
 
         let mut params = serde_json::Map::new();
         if let Some(ref name) = self.tool_name {
@@ -69,14 +72,10 @@ impl McpContext {
     /// by rebuilding the JSON-RPC envelope from the extracted, validated fields.
     pub fn to_canonical_body(&self) -> Vec<u8> {
         if self.requests.len() == 1 {
-            serde_json::to_vec(&self.requests[0].to_jsonrpc())
-                .unwrap_or_default()
+            serde_json::to_vec(&self.requests[0].to_jsonrpc()).unwrap_or_default()
         } else {
-            let batch: Vec<serde_json::Value> = self
-                .requests
-                .iter()
-                .map(|r| r.to_jsonrpc())
-                .collect();
+            let batch: Vec<serde_json::Value> =
+                self.requests.iter().map(|r| r.to_jsonrpc()).collect();
             serde_json::to_vec(&batch).unwrap_or_default()
         }
     }

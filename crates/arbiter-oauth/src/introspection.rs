@@ -78,33 +78,32 @@ pub async fn introspect_token(token: &str, issuer: &IssuerConfig) -> Result<Clai
 
     // Re-validate issuer against configured value (don't trust the introspection
     // endpoint blindly -- a compromised endpoint could return arbitrary claims).
-    if let Some(ref returned_iss) = body.iss {
-        if returned_iss != &issuer.issuer_url {
-            tracing::warn!(
-                expected = %issuer.issuer_url,
-                actual = %returned_iss,
-                "introspection response issuer does not match configured issuer"
-            );
-            return Err(OAuthError::IntrospectionFailed(
-                "issuer mismatch in introspection response".into(),
-            ));
-        }
+    if let Some(ref returned_iss) = body.iss
+        && returned_iss != &issuer.issuer_url
+    {
+        tracing::warn!(
+            expected = %issuer.issuer_url,
+            actual = %returned_iss,
+            "introspection response issuer does not match configured issuer"
+        );
+        return Err(OAuthError::IntrospectionFailed(
+            "issuer mismatch in introspection response".into(),
+        ));
     }
 
     // Re-validate audience if the issuer has configured audiences.
-    if !issuer.audiences.is_empty() {
-        if let Some(ref returned_aud) = body.aud {
-            if !issuer.audiences.contains(returned_aud) {
-                tracing::warn!(
-                    expected = ?issuer.audiences,
-                    actual = %returned_aud,
-                    "introspection response audience not in configured set"
-                );
-                return Err(OAuthError::IntrospectionFailed(
-                    "audience mismatch in introspection response".into(),
-                ));
-            }
-        }
+    if !issuer.audiences.is_empty()
+        && let Some(ref returned_aud) = body.aud
+        && !issuer.audiences.contains(returned_aud)
+    {
+        tracing::warn!(
+            expected = ?issuer.audiences,
+            actual = %returned_aud,
+            "introspection response audience not in configured set"
+        );
+        return Err(OAuthError::IntrospectionFailed(
+            "audience mismatch in introspection response".into(),
+        ));
     }
 
     // Re-validate expiry against current time.
@@ -114,7 +113,11 @@ pub async fn introspect_token(token: &str, issuer: &IssuerConfig) -> Result<Clai
             .unwrap_or_default()
             .as_secs();
         if exp < now {
-            tracing::warn!(exp, now, "introspection returned active token with past expiry");
+            tracing::warn!(
+                exp,
+                now,
+                "introspection returned active token with past expiry"
+            );
             return Err(OAuthError::IntrospectionFailed(
                 "token expired per introspection response exp claim".into(),
             ));

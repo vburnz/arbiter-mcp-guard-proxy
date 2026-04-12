@@ -179,9 +179,7 @@ impl AgentRegistry for InMemoryRegistry {
         let now = Utc::now();
         agents
             .values()
-            .filter(|a| {
-                a.active && a.expires_at.map_or(true, |exp| now < exp)
-            })
+            .filter(|a| a.active && a.expires_at.is_none_or(|exp| now < exp))
             .cloned()
             .collect()
     }
@@ -231,19 +229,14 @@ impl AgentRegistry for InMemoryRegistry {
             let delegations = self.delegations.read().await;
             let mut depth = 0;
             let mut current = from;
-            loop {
-                match delegations.iter().find(|d| d.to == current) {
-                    Some(link) => {
-                        depth += 1;
-                        if depth >= MAX_CHAIN_DEPTH {
-                            return Err(IdentityError::InternalError(format!(
-                                "delegation chain depth would exceed maximum of {MAX_CHAIN_DEPTH}"
-                            )));
-                        }
-                        current = link.from;
-                    }
-                    None => break,
+            while let Some(link) = delegations.iter().find(|d| d.to == current) {
+                depth += 1;
+                if depth >= MAX_CHAIN_DEPTH {
+                    return Err(IdentityError::InternalError(format!(
+                        "delegation chain depth would exceed maximum of {MAX_CHAIN_DEPTH}"
+                    )));
                 }
+                current = link.from;
             }
         }
 

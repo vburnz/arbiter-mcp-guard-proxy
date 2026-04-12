@@ -178,10 +178,10 @@ impl AgentRegistry for StorageBackedRegistry {
         if !agent.active {
             return Err(IdentityError::AgentDeactivated(id));
         }
-        if let Some(expires_at) = agent.expires_at {
-            if chrono::Utc::now() > expires_at {
-                return Err(IdentityError::AgentDeactivated(id));
-            }
+        if let Some(expires_at) = agent.expires_at
+            && chrono::Utc::now() > expires_at
+        {
+            return Err(IdentityError::AgentDeactivated(id));
         }
 
         Ok(agent)

@@ -252,7 +252,6 @@ pub async fn register_agent(
         return e.into_response();
     }
 
-
     match state
         .registry
         .register_agent(
@@ -321,7 +320,6 @@ pub async fn get_agent(
         return e.into_response();
     }
 
-
     state.admin_audit_log("get_agent", Some(id), "");
 
     match state.registry.get_agent(id).await {
@@ -362,7 +360,6 @@ pub async fn delegate_agent(
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-
 
     state.admin_audit_log("delegate_agent", Some(from_id), &format!("to={}", req.to));
 
@@ -416,11 +413,10 @@ pub async fn list_delegations(
         return e.into_response();
     }
 
-
     state.admin_audit_log("list_delegations", Some(id), "");
 
     // Verify agent exists.
-    if let Err(e) = state.registry.get_agent(id).await {
+    if let Err(_e) = state.registry.get_agent(id).await {
         return (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
@@ -458,7 +454,6 @@ pub async fn deactivate_agent(
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-
 
     state.admin_audit_log("deactivate_agent", Some(id), "cascade");
 
@@ -512,12 +507,11 @@ pub async fn issue_agent_token(
         return e.into_response();
     }
 
-
     state.admin_audit_log("issue_agent_token", Some(id), "");
 
     let agent = match state.registry.get_agent(id).await {
         Ok(a) => a,
-        Err(e) => {
+        Err(_e) => {
             return (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
@@ -587,7 +581,6 @@ pub async fn list_agents(State(state): State<AppState>, headers: HeaderMap) -> i
         return e.into_response();
     }
 
-
     state.admin_audit_log("list_agents", None, "");
 
     let agents = state.registry.list_agents().await;
@@ -613,7 +606,6 @@ pub async fn create_session(
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-
 
     state.admin_audit_log(
         "create_session",
@@ -851,12 +843,11 @@ pub async fn get_session(
         return e.into_response();
     }
 
-
     state.admin_audit_log("get_session", None, &format!("session_id={}", id));
 
     let session = match state.session_store.get(id).await {
         Ok(s) => s,
-        Err(e) => {
+        Err(_e) => {
             return (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
@@ -953,7 +944,6 @@ pub async fn close_session(
         return e.into_response();
     }
 
-
     state.admin_audit_log("close_session", None, &format!("session_id={}", id));
 
     let session = match state.session_store.close(id).await {
@@ -1047,7 +1037,6 @@ pub async fn explain_policy(
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-
 
     state.admin_audit_log(
         "explain_policy",
@@ -1145,7 +1134,6 @@ pub async fn validate_policy(
         return e.into_response();
     }
 
-
     state.admin_audit_log("validate_policy", None, "");
 
     let result = arbiter_policy::PolicyConfig::validate_toml(&req.policy_toml);
@@ -1160,7 +1148,6 @@ pub async fn reload_policy(State(state): State<AppState>, headers: HeaderMap) ->
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-
 
     state.admin_audit_log("reload_policy", None, "");
 
@@ -1236,7 +1223,6 @@ pub async fn policy_schema(State(state): State<AppState>, headers: HeaderMap) ->
     if let Err(e) = validate_admin_key(&headers, &state.admin_api_key) {
         return e.into_response();
     }
-
 
     state.admin_audit_log("policy_schema", None, "");
 

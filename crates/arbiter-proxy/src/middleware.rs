@@ -68,15 +68,13 @@ fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(hi), Some(lo)) = (
-                hex_val(bytes[i + 1]),
-                hex_val(bytes[i + 2]),
-            ) {
-                result.push(hi * 16 + lo);
-                i += 3;
-                continue;
-            }
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let (Some(hi), Some(lo)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2]))
+        {
+            result.push(hi * 16 + lo);
+            i += 3;
+            continue;
         }
         result.push(bytes[i]);
         i += 1;
@@ -107,7 +105,11 @@ impl Middleware for PathBlocker {
                 return Err(Box::new(resp));
             }
         };
-        if self.blocked.iter().any(|b| path == *b || raw_path == b.as_str()) {
+        if self
+            .blocked
+            .iter()
+            .any(|b| path == *b || raw_path == b.as_str())
+        {
             tracing::warn!(path, "request blocked by path blocker");
             let resp = Response::builder()
                 .status(StatusCode::FORBIDDEN)

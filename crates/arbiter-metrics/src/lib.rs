@@ -207,10 +207,11 @@ impl ArbiterMetrics {
         let metric_families = self.registry.gather();
         let mut buffer = Vec::new();
         encoder.encode(&metric_families, &mut buffer)?;
-        String::from_utf8(buffer)
-            .map_err(|e| MetricsError::Prometheus(prometheus::Error::Msg(
-                format!("metrics encoding produced invalid UTF-8: {e}")
+        String::from_utf8(buffer).map_err(|e| {
+            MetricsError::Prometheus(prometheus::Error::Msg(format!(
+                "metrics encoding produced invalid UTF-8: {e}"
             )))
+        })
     }
 }
 
@@ -375,12 +376,28 @@ mod tests {
         metrics.record_request("something_unexpected");
         metrics.record_request("");
 
-        assert_eq!(metrics.requests_total.with_label_values(&["allow"]).get(), 1);
-        assert_eq!(metrics.requests_total.with_label_values(&["deny"]).get(), 1);
-        assert_eq!(metrics.requests_total.with_label_values(&["escalate"]).get(), 1);
-        assert_eq!(metrics.requests_total.with_label_values(&["error"]).get(), 1);
         assert_eq!(
-            metrics.requests_total.with_label_values(&["__unknown__"]).get(), 2,
+            metrics.requests_total.with_label_values(&["allow"]).get(),
+            1
+        );
+        assert_eq!(metrics.requests_total.with_label_values(&["deny"]).get(), 1);
+        assert_eq!(
+            metrics
+                .requests_total
+                .with_label_values(&["escalate"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics.requests_total.with_label_values(&["error"]).get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .requests_total
+                .with_label_values(&["__unknown__"])
+                .get(),
+            2,
             "unexpected decision values must be bucketed under __unknown__"
         );
     }

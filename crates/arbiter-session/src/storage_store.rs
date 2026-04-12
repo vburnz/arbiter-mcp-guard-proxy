@@ -165,14 +165,14 @@ impl StorageBackedSessionStore {
             .ok_or(SessionError::NotFound(session_id))?;
 
         // Verify agent binding to prevent session fixation.
-        if let Some(agent_id) = requesting_agent_id {
-            if agent_id != session.agent_id {
-                return Err(SessionError::AgentMismatch {
-                    session_id,
-                    expected: session.agent_id,
-                    actual: agent_id,
-                });
-            }
+        if let Some(agent_id) = requesting_agent_id
+            && agent_id != session.agent_id
+        {
+            return Err(SessionError::AgentMismatch {
+                session_id,
+                expected: session.agent_id,
+                actual: agent_id,
+            });
         }
 
         if session.status == SessionStatus::Closed {
@@ -255,14 +255,14 @@ impl StorageBackedSessionStore {
             .ok_or(SessionError::NotFound(session_id))?;
 
         // Verify agent binding to prevent session fixation.
-        if let Some(agent_id) = requesting_agent_id {
-            if agent_id != session.agent_id {
-                return Err(SessionError::AgentMismatch {
-                    session_id,
-                    expected: session.agent_id,
-                    actual: agent_id,
-                });
-            }
+        if let Some(agent_id) = requesting_agent_id
+            && agent_id != session.agent_id
+        {
+            return Err(SessionError::AgentMismatch {
+                session_id,
+                expected: session.agent_id,
+                actual: agent_id,
+            });
         }
 
         if session.status == SessionStatus::Closed {
@@ -677,7 +677,9 @@ mod tests {
             .await
             .unwrap();
 
-        let result = store.use_session(session.session_id, "read_file", None).await;
+        let result = store
+            .use_session(session.session_id, "read_file", None)
+            .await;
         assert!(matches!(result, Err(SessionError::BudgetExceeded { .. })));
     }
 
@@ -691,7 +693,9 @@ mod tests {
             .await
             .unwrap();
 
-        let result = store.use_session(session.session_id, "delete_file", None).await;
+        let result = store
+            .use_session(session.session_id, "delete_file", None)
+            .await;
         assert!(matches!(
             result,
             Err(SessionError::ToolNotAuthorized { .. })
@@ -707,7 +711,9 @@ mod tests {
 
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
-        let result = store.use_session(session.session_id, "read_file", None).await;
+        let result = store
+            .use_session(session.session_id, "read_file", None)
+            .await;
         assert!(matches!(result, Err(SessionError::Expired(_))));
     }
 
@@ -718,7 +724,9 @@ mod tests {
 
         store.close(session.session_id).await.unwrap();
 
-        let result = store.use_session(session.session_id, "read_file", None).await;
+        let result = store
+            .use_session(session.session_id, "read_file", None)
+            .await;
         assert!(matches!(result, Err(SessionError::AlreadyClosed(_))));
     }
 

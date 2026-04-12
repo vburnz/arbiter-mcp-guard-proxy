@@ -287,7 +287,14 @@ impl AnomalyDetector {
                 let raw = args.to_string().to_lowercase();
                 let text: String = raw
                     .chars()
-                    .filter(|c| !c.is_control() && *c != '\u{200B}' && *c != '\u{200C}' && *c != '\u{200D}' && *c != '\u{FEFF}' && *c != '\u{00AD}')
+                    .filter(|c| {
+                        !c.is_control()
+                            && *c != '\u{200B}'
+                            && *c != '\u{200C}'
+                            && *c != '\u{200D}'
+                            && *c != '\u{FEFF}'
+                            && *c != '\u{00AD}'
+                    })
                     .collect();
                 for pattern in &self.config.suspicious_arg_patterns {
                     if text.contains(pattern.as_str()) {
@@ -782,7 +789,10 @@ mod tests {
     /// Nested array in a read session should be flagged.
     #[test]
     fn nested_array_in_read_session_flagged() {
-        let detector = AnomalyDetector::new(AnomalyConfig { escalate_to_deny: false, ..Default::default() });
+        let detector = AnomalyDetector::new(AnomalyConfig {
+            escalate_to_deny: false,
+            ..Default::default()
+        });
         let args = serde_json::json!({"files": ["a", "b"]});
         let result = detector.detect_with_args(
             "read the config",
@@ -799,7 +809,10 @@ mod tests {
     /// Suspicious key name in a read session should be flagged.
     #[test]
     fn suspicious_key_in_read_session_flagged() {
-        let detector = AnomalyDetector::new(AnomalyConfig { escalate_to_deny: false, ..Default::default() });
+        let detector = AnomalyDetector::new(AnomalyConfig {
+            escalate_to_deny: false,
+            ..Default::default()
+        });
         let args = serde_json::json!({"shell_command": "ls"});
         let result = detector.detect_with_args(
             "read the config",
@@ -816,7 +829,10 @@ mod tests {
     /// String value > 1KB in a read session should be flagged.
     #[test]
     fn long_value_in_read_session_flagged() {
-        let detector = AnomalyDetector::new(AnomalyConfig { escalate_to_deny: false, ..Default::default() });
+        let detector = AnomalyDetector::new(AnomalyConfig {
+            escalate_to_deny: false,
+            ..Default::default()
+        });
         let long_string = "A".repeat(1025);
         let args = serde_json::json!({"payload": long_string});
         let result = detector.detect_with_args(
