@@ -241,7 +241,7 @@ This project is provided as-is.
 [GitHub Issues](https://github.com/cyrenei/arbiter-mcp-firewall/issues), no SLA,
 no guaranteed response time.
 
-Contact: [arbitersecurity@proton.me](mailto:arbitersecurity@proton.me)
+Contact: [cyrenei@proton.me](mailto:arbitersecurity@proton.me)
 
 <details>
 <summary>PGP Public Key</summary>
