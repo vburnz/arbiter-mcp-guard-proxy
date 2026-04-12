@@ -15,8 +15,8 @@ can run DDL on production databases, export customer data, or escalate
 privileges, with nobody in the loop to stop it.
 
 Applications like Claude Code let us define permissions. But that requires us to place trust
-in Claude Code. It should go without saying: **do not trust the dispensary guy to
-tell you what to take for back pain; ask him to help you take an edge off.**
+in Claude Code, a closed source project, maintained by a corporation that operates non-transparently and is incentivized to push
+for more control over your computer, not less.
 
 Arbiter is agnostic of development tooling and enforces:
 
