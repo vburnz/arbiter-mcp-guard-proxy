@@ -300,7 +300,3 @@ bLcV4f20Wa7wB4CHB3RVQjhnVzPa2DwUUvDI/xLAoXoV7KRUYMbe9oSgk01D2tJF
 =gMhW
 -----END PGP PUBLIC KEY BLOCK-----
 ```
-
-## Project Management
-
-This project is managed agentically under human supervision.
