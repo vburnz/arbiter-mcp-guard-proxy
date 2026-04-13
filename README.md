@@ -243,6 +243,10 @@ no guaranteed response time.
 
 Contact: [cyrenei@proton.me](mailto:arbitersecurity@proton.me)
 
+---
+
+> **Disclaimer:** This project is managed agentically under human supervision.
+
 <details>
 <summary>PGP Public Key</summary>
 
