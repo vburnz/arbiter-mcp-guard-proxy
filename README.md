@@ -68,7 +68,7 @@ at your own risk. There are no paid tiers, no license keys, and no gated
 features. Everything in this repository is free and open source under
 Apache 2.0.
 
-2. Due to resource constraints, this project is currently managed agentically, under close human supervision.
+2. Due to resource constraints, this project is currently managed agentically, under close human supervision. Take that as you will.
 
 ## Sponsor
 
