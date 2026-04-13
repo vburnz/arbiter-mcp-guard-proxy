@@ -119,7 +119,7 @@ async fn load_test_throughput() {
 [[policies]]
 id = "load-test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();

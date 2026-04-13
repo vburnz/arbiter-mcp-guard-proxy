@@ -347,6 +347,14 @@ pub struct AuditSection {
     /// development environments where audit availability is not critical.
     #[serde(default = "default_true")]
     pub require_healthy: bool,
+
+    /// Emit BLAKE3 hash-chained audit records for tamper detection.
+    /// Each entry gets a monotonic `chain_sequence`, `chain_prev_hash`
+    /// linking it to the previous record, and a `chain_record_hash`
+    /// over the entry contents. Verify with `arbiter-ctl audit verify`.
+    /// Default: true (secure by default).
+    #[serde(default = "default_true")]
+    pub hash_chain: bool,
 }
 
 impl Default for AuditSection {
@@ -356,6 +364,7 @@ impl Default for AuditSection {
             file_path: None,
             redaction_patterns: Vec::new(),
             require_healthy: true,
+            hash_chain: true,
         }
     }
 }

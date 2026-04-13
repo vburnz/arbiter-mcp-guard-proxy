@@ -289,6 +289,7 @@ fn build_audit(config: &crate::config::AuditSection) -> (Option<Arc<AuditSink>>,
     let sink_config = AuditSinkConfig {
         write_stdout: true,
         file_path: config.file_path.as_ref().map(std::path::PathBuf::from),
+        hash_chain: config.hash_chain,
         ..Default::default()
     };
     let sink = Arc::new(AuditSink::new(sink_config));

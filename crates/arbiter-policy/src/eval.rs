@@ -352,8 +352,16 @@ fn matches_intent(intent_match: &IntentMatch, declared_intent: &str) -> bool {
 
 /// Check if the request tool matches the policy's allowed tools.
 fn matches_tool(policy: &Policy, request: &McpRequest) -> bool {
-    // Empty allowed_tools means "applies to all tools".
-    if policy.allowed_tools.is_empty() {
+    // Empty allowed_tools OR an explicit "*" entry means "applies to all
+    // tools". The empty form is legal for Deny/Escalate policies where a
+    // catch-all is clearly intended. Allow policies with an empty
+    // allowed_tools AND empty resource_match are rejected at compile() time
+    // and never reach here; `["*"]` is the explicit opt-in form required for
+    // Allow wildcards, so operators who write `allowed_tools = []` by mistake
+    // get an error instead of silent blanket access.
+    if policy.allowed_tools.is_empty()
+        || policy.allowed_tools.iter().any(|t| t == "*")
+    {
         return matches_resource_uri(policy, request);
     }
 

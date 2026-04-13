@@ -197,7 +197,7 @@ async fn test_unauthenticated_access() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -265,7 +265,7 @@ async fn test_protocol_injection() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -357,7 +357,7 @@ async fn test_tool_escalation() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -461,7 +461,7 @@ async fn test_resource_exhaustion_rate_limit() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -578,7 +578,7 @@ async fn test_resource_exhaustion_budget() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -688,7 +688,7 @@ async fn test_session_replay_expired() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -782,7 +782,7 @@ async fn test_session_replay_closed() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();

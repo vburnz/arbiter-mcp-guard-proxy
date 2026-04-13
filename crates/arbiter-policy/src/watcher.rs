@@ -156,6 +156,7 @@ mod tests {
 [[policies]]
 id = "initial"
 effect = "allow"
+allowed_tools = ["*"]
 "#;
         std::fs::write(&policy_file, initial_toml).unwrap();
 
@@ -173,6 +174,7 @@ effect = "allow"
 [[policies]]
 id = "initial"
 effect = "allow"
+allowed_tools = ["*"]
 
 [[policies]]
 id = "added"
@@ -213,6 +215,7 @@ effect = "deny"
 [[policies]]
 id = "valid"
 effect = "allow"
+allowed_tools = ["*"]
 "#;
         std::fs::write(&policy_file, valid_toml).unwrap();
 
