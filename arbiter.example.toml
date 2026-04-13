@@ -81,11 +81,14 @@ require_healthy = true
 # file_path = "/var/log/arbiter/audit.jsonl"
 # Sensitive field patterns for argument redaction (case-insensitive).
 redaction_patterns = ["password", "secret", "token", "key", "authorization", "credential"]
-# Enable BLAKE3 hash-chained audit records for tamper detection.
-# When true, each audit record includes a monotonic sequence number and
-# a BLAKE3 hash linking it to the previous record. Detect tampering,
-# insertion, and deletion with `arbiter-ctl audit verify --file <path>`.
-hash_chain = false
+# Emit BLAKE3 hash-chained audit records for tamper detection.
+# Default: true (secure by default). Each audit record gets a monotonic
+# `chain_sequence`, a `chain_prev_hash` linking it to the previous record,
+# and a `chain_record_hash` over the current record. Concurrent writes are
+# serialized so on-disk order matches sequence order. Verify the chain with
+# `arbiter-ctl audit verify --file <path>`. Set to false only for development
+# environments where audit integrity is not required.
+hash_chain = true
 
 # ─── Credentials ─────────────────────────────────────────────────────
 # Configure credential injection so agents never see raw upstream secrets.

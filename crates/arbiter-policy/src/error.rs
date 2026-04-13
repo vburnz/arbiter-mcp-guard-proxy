@@ -32,4 +32,12 @@ pub enum PolicyError {
 
     #[error("duplicate policy ID '{policy_id}'")]
     DuplicatePolicyId { policy_id: String },
+
+    #[error(
+        "policy '{policy_id}' has effect=allow with empty allowed_tools \
+         and empty resource_match; this would grant blanket access to every \
+         tool and resource. Set allowed_tools or resource_match explicitly, \
+         or use effect=deny if a blanket rule is intended."
+    )]
+    EmptyAllowOnAllEffect { policy_id: String },
 }

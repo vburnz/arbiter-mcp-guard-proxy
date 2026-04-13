@@ -299,6 +299,7 @@ pub fn build_audit(config: &AuditConfig) -> (Option<Arc<AuditSink>>, RedactionCo
     let sink_config = arbiter_audit::AuditSinkConfig {
         write_stdout: true,
         file_path: config.file_path.as_ref().map(std::path::PathBuf::from),
+        hash_chain: true,
         ..Default::default()
     };
     let sink = Arc::new(AuditSink::new(sink_config));

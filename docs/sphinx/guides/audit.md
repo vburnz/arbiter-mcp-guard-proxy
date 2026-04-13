@@ -36,7 +36,7 @@ Notice `"password": "[REDACTED]"`. Sensitive fields are automatically scrubbed b
 enabled = true
 file_path = "/var/log/arbiter/audit.jsonl"
 redaction_patterns = ["password", "secret", "token", "key", "authorization", "credential"]
-hash_chain = false
+hash_chain = true
 ```
 
 ### Redaction Patterns
@@ -56,25 +56,31 @@ Redaction applies to audit output only. The actual request sent to the upstream 
 
 ## Hash-Chained Audit Records
 
-For environments where tamper detection matters (compliance, incident investigation), enable hash chaining:
+Hash chaining is **on by default** for tamper detection. Each record is linked
+to its predecessor via a BLAKE3 hash chain. Disable only for development or
+ephemeral environments where audit integrity is not required:
 
 ```toml
 [audit]
-hash_chain = true
+hash_chain = false
 ```
 
-When enabled, each audit record includes two additional fields:
+When enabled, each audit record includes three additional fields:
 
-- **`sequence`:** a monotonically increasing counter
-- **`prev_hash`:** a BLAKE3 hash of the previous record
+- **`chain_sequence`:** a monotonically increasing counter
+- **`chain_prev_hash`:** a BLAKE3 hash of the previous record's `chain_record_hash`
+- **`chain_record_hash`:** a BLAKE3 hash over the current record (including sequence and prev_hash)
 
-This creates a chain where modifying, inserting, or deleting any record breaks the hash link. You can verify the chain hasn't been tampered with:
+This creates a chain where modifying, inserting, or deleting any record breaks
+the hash link. Concurrent audit writes are serialized so on-disk order matches
+sequence order; a naive top-to-bottom verifier is sufficient.
 
 ```bash
 $ arbiter-ctl audit verify --file /var/log/arbiter/audit.jsonl
 ```
 
-The chain resumes correctly across Arbiter restarts; the last sequence number and hash are recovered from the existing file.
+The chain resumes correctly across Arbiter restarts; the last sequence number
+and hash are recovered from the existing file.
 
 ### What Hash Chaining Detects
 

@@ -413,7 +413,7 @@ fn allow_all_policy() -> &'static str {
     r#"[[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#
 }
 
@@ -1943,7 +1943,7 @@ async fn policy_specificity_resolution() {
 [[policies]]
 id = "broad-allow"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 
 [[policies]]
 id = "specific-deny-delete"
@@ -2341,11 +2341,41 @@ signing_secret = "test-secret-that-is-at-least-32-bytes-long-for-hmac"
         "should have at least 2 allow entries for hash chain test"
     );
 
-    // Verify hash chain fields exist
-    if let Some(seq) = allow_entries[0].get("sequence_number") {
-        assert!(seq.as_u64().is_some(), "sequence_number should be numeric");
-    }
-    if let Some(hash) = allow_entries[0].get("previous_hash") {
-        assert!(hash.as_str().is_some(), "previous_hash should be a string");
-    }
+    // Verify hash chain fields are present and link each record to its predecessor.
+    // Earlier versions of this test used `if let Some(...)` on field names that
+    // did not match the serialized form (`sequence_number` / `previous_hash`
+    // instead of `chain_sequence` / `chain_prev_hash`), so the chain assertions
+    // never executed and the test passed regardless of whether the chain worked.
+    let first = &allow_entries[0];
+    let first_seq = first
+        .get("chain_sequence")
+        .and_then(|v| v.as_u64())
+        .expect("chain_sequence missing from first allow entry");
+    let first_record = first
+        .get("chain_record_hash")
+        .and_then(|v| v.as_str())
+        .expect("chain_record_hash missing from first allow entry")
+        .to_string();
+    first
+        .get("chain_prev_hash")
+        .and_then(|v| v.as_str())
+        .expect("chain_prev_hash missing from first allow entry");
+
+    let second = &allow_entries[1];
+    let second_seq = second
+        .get("chain_sequence")
+        .and_then(|v| v.as_u64())
+        .expect("chain_sequence missing from second allow entry");
+    let second_prev = second
+        .get("chain_prev_hash")
+        .and_then(|v| v.as_str())
+        .expect("chain_prev_hash missing from second allow entry");
+    assert!(
+        second_seq > first_seq,
+        "chain_sequence must be strictly monotonic: {first_seq} -> {second_seq}"
+    );
+    assert_eq!(
+        second_prev, first_record,
+        "second entry's chain_prev_hash must match first entry's chain_record_hash"
+    );
 }

@@ -41,13 +41,15 @@ fn make_request(tool_name: &str, arguments: Option<serde_json::Value>) -> McpReq
 }
 
 /// Build a single allow-all policy (matches any agent, principal, intent, tool).
+/// Uses the explicit `"*"` wildcard because Allow policies with an empty
+/// allowed_tools AND empty resource_match are rejected at compile() time.
 fn allow_all_policy() -> Policy {
     Policy {
         id: "allow-all".into(),
         agent_match: AgentMatch::default(),
         principal_match: PrincipalMatch::default(),
         intent_match: IntentMatch::default(),
-        allowed_tools: vec![],
+        allowed_tools: vec!["*".into()],
         resource_match: vec![],
         parameter_constraints: vec![],
         effect: Effect::Allow,

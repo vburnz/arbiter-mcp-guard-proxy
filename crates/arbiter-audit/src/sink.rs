@@ -33,6 +33,10 @@ pub struct AuditSinkConfig {
     /// Default: 100 MB. The sink emits tracing::warn when the file
     /// exceeds this size so operators can set up external log rotation.
     pub max_file_size_bytes: u64,
+
+    /// Emit BLAKE3 hash-chained records (`chain_sequence`, `chain_prev_hash`,
+    /// `chain_record_hash`) on each entry for tamper detection. Default: true.
+    pub hash_chain: bool,
 }
 
 /// Default max audit file size: 100 MB.
@@ -44,6 +48,7 @@ impl Default for AuditSinkConfig {
             write_stdout: true,
             file_path: None,
             max_file_size_bytes: DEFAULT_MAX_AUDIT_FILE_SIZE,
+            hash_chain: true,
         }
     }
 }
@@ -140,21 +145,32 @@ impl AuditSink {
     ///
     /// Writes to stdout and file sinks in order. The file sink is considered
     /// critical -- errors are tracked and returned.
+    ///
+    /// When `hash_chain` is enabled, the chain guard is held across the file
+    /// write so sequence order matches on-disk order. A naive
+    /// top-to-bottom verifier is sufficient; we do not require callers to
+    /// sort by `chain_sequence` first.
     pub async fn write(&self, entry: &AuditEntry) -> Result<(), SinkError> {
-        // Compute hash chain: assign sequence number and hash.
+        // Acquire the chain lock once and hold it across the entire write.
+        // Releasing it before the file write (as an earlier version did)
+        // allowed two concurrent callers to interleave: assigning sequence
+        // numbers in order N, N+1 but writing them to disk in order N+1, N.
+        // That left the cryptographic chain intact but broke top-to-bottom
+        // file-order verification.
+        let mut chain_guard = self.chain.lock().await;
+
         let mut chained_entry = entry.clone();
-        {
-            let mut chain = self.chain.lock().await;
-            chain.sequence += 1;
-            chained_entry.chain_sequence = Some(chain.sequence);
-            chained_entry.chain_prev_hash = Some(chain.prev_hash.clone());
+        if self.config.hash_chain {
+            chain_guard.sequence += 1;
+            chained_entry.chain_sequence = Some(chain_guard.sequence);
+            chained_entry.chain_prev_hash = Some(chain_guard.prev_hash.clone());
             // chain_record_hash is computed over the entry WITH sequence and prev_hash
             // but WITHOUT the record_hash itself.
             chained_entry.chain_record_hash = None;
             let pre_hash_json = serde_json::to_string(&chained_entry).unwrap_or_default();
             let record_hash = blake3::hash(pre_hash_json.as_bytes()).to_hex().to_string();
             chained_entry.chain_record_hash = Some(record_hash.clone());
-            chain.prev_hash = record_hash;
+            chain_guard.prev_hash = record_hash;
         }
 
         let json = serde_json::to_string(&chained_entry)?;

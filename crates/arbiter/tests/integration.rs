@@ -88,7 +88,7 @@ async fn full_lifecycle_integration() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -799,7 +799,7 @@ async fn behavioral_anomaly_in_audit_log() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -1198,7 +1198,7 @@ async fn agent_isolation_cross_session() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -1373,7 +1373,7 @@ async fn session_close_prevents_reuse() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -1542,7 +1542,7 @@ async fn policy_deny_overrides_session_allow() {
 [[policies]]
 id = "allow-reads"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 
 [[policies]]
 id = "deny-write-file"
@@ -1712,7 +1712,7 @@ async fn anomaly_escalation_hard_deny() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -1887,7 +1887,7 @@ async fn websocket_upgrade_rejected() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -1999,7 +1999,7 @@ async fn missing_agent_id_with_session_rejected() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -2132,7 +2132,7 @@ async fn invalid_uuid_agent_id_rejected() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -2266,7 +2266,7 @@ async fn request_body_too_large_rejected() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -2379,7 +2379,7 @@ async fn malformed_session_header_rejected() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -2680,7 +2680,7 @@ async fn trust_degradation_feedback_loop() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -2859,7 +2859,7 @@ async fn strict_mcp_mode_rejects_non_mcp_post() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -3000,7 +3000,7 @@ async fn batch_mcp_mixed_tools_denied_atomically() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -3202,7 +3202,7 @@ async fn upstream_header_spoofing_detected() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -3526,7 +3526,7 @@ async fn credential_injection_and_response_scrubbing_e2e() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();
@@ -3727,7 +3727,7 @@ async fn concurrent_budget_exhaustion_no_overrun() {
 [[policies]]
 id = "test-allow-all"
 effect = "allow"
-allowed_tools = []
+allowed_tools = ["*"]
 "#,
     )
     .unwrap();

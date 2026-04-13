@@ -115,7 +115,8 @@ Audit logging configuration.
 | `enabled` | bool | `true` | Enable audit logging |
 | `file_path` | string | none | Append-only JSONL log file path |
 | `redaction_patterns` | string[] | see below | Field name patterns that trigger argument redaction |
-| `hash_chain` | bool | `false` | Enable BLAKE3 hash-chained records |
+| `require_healthy` | bool | `true` | Deny traffic when the audit sink is degraded (fail-closed) |
+| `hash_chain` | bool | `true` | Emit BLAKE3 hash-chained records for tamper detection |
 
 Default redaction patterns cover 24 variants including abbreviations and PII: `password`, `passwd`, `pwd`, `token`, `access_token`, `refresh_token`, `secret`, `client_secret`, `key`, `api_key`, `apikey`, `api-key`, `authorization`, `auth`, `credential`, `cred`, `private`, `private_key`, `ssn`, `social_security`, `credit_card`, `card_number`, `cvv`, `cvc`.
 
@@ -124,7 +125,8 @@ Default redaction patterns cover 24 variants including abbreviations and PII: `p
 enabled = true
 file_path = "/var/log/arbiter/audit.jsonl"
 redaction_patterns = ["password", "secret", "token", "key", "authorization", "credential"]
-hash_chain = false
+require_healthy = true
+hash_chain = true
 ```
 
 ## `[credentials]`

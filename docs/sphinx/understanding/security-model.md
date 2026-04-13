@@ -136,7 +136,7 @@ Ordered by risk reduction per effort:
 
 1. **Load secrets from environment variables.** Set `ARBITER_ADMIN_API_KEY` and `ARBITER_SIGNING_SECRET`. Never use the compiled defaults in production.
 
-2. **Enable hash-chained audit.** Set `hash_chain = true` in `[audit]` for tamper-detectable logs.
+2. **Keep hash-chained audit enabled.** `hash_chain` defaults to `true` in `[audit]`; leave it on for tamper-detectable logs. Each record carries `chain_sequence`, `chain_prev_hash`, and `chain_record_hash`, and concurrent writes are serialized so on-disk order matches sequence order.
 
 3. **Cap sessions per agent.** The default of 10 is reasonable. Lower it if agents don't need concurrent sessions.
 

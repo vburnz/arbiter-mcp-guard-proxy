@@ -261,17 +261,44 @@ impl PolicyConfig {
             policy.intent_match.compiled_keywords = compiled_keywords;
         }
 
-        // Warn when allowed_tools is empty (wildcard).
-        // An empty allowed_tools list means the policy matches ALL tools, which
-        // may be unintentional and creates an overpermissive rule.
+        // Reject Allow policies that match everything.
+        //
+        // An Allow policy with empty allowed_tools AND empty resource_match
+        // is a blanket grant to every tool and every resource on the
+        // matching agent/principal/intent. Operators who wrote
+        // `allowed_tools = []` expecting "this policy allows nothing" get
+        // the opposite, because empty-is-wildcard is the semantics required
+        // for Deny policies ("deny X on all tools") and the handler/engine
+        // share the matching code. A warning alone is insufficient — warnings
+        // are routinely silenced in production log pipelines, and the natural
+        // reading of `[]` as the restrictive case makes the footgun plausible.
+        //
+        // Deny and Escalate policies can still use the empty-means-everything
+        // form; a warning fires for those below.
         for policy in &self.policies {
-            if policy.allowed_tools.is_empty() {
+            if policy.effect == Effect::Allow
+                && policy.allowed_tools.is_empty()
+                && policy.resource_match.is_empty()
+            {
+                return Err(crate::PolicyError::EmptyAllowOnAllEffect {
+                    policy_id: policy.id.clone(),
+                });
+            }
+        }
+
+        // Warn when allowed_tools is empty on a non-Allow policy.
+        // An empty allowed_tools list means the policy matches ALL tools,
+        // which is valid for Deny/Escalate (blanket rules are legitimate) but
+        // worth surfacing so operators know the rule is intentionally broad.
+        for policy in &self.policies {
+            if policy.allowed_tools.is_empty() && policy.resource_match.is_empty() {
                 let effect_name = format!("{:?}", policy.effect).to_lowercase();
                 tracing::warn!(
                     policy_id = %policy.id,
                     effect = %effect_name,
-                    "policy has empty allowed_tools (matches ALL tools). \
-                     This creates a blanket {effect} rule. Set allowed_tools explicitly.",
+                    "policy has empty allowed_tools and empty resource_match \
+                     (matches ALL tools and resources). This creates a blanket \
+                     {effect} rule. Set allowed_tools or resource_match explicitly.",
                     effect = effect_name,
                 );
             }
@@ -528,6 +555,7 @@ priority = 1001
 [[policies]]
 id = "max-allowed"
 effect = "allow"
+allowed_tools = ["*"]
 priority = 1000
 "#;
         let config = PolicyConfig::from_toml(toml_ok).unwrap();
@@ -538,6 +566,7 @@ priority = 1000
 [[policies]]
 id = "below-max"
 effect = "allow"
+allowed_tools = ["*"]
 priority = 999
 "#;
         let config = PolicyConfig::from_toml(toml_below).unwrap();
@@ -584,6 +613,7 @@ regex = "{}"
 [[policies]]
 id = "ok-regex"
 effect = "allow"
+allowed_tools = ["*"]
 
 [policies.intent_match]
 regex = "{}"
@@ -650,5 +680,69 @@ regex = "[invalid"
             ),
             "tool lists sharing 'write_file' must overlap"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Allow with empty allowed_tools + empty resource_match is rejected
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn allow_with_empty_allowed_tools_and_no_resource_match_rejected() {
+        // An operator writing `allowed_tools = []` intending "allow nothing"
+        // gets the opposite at runtime because empty = wildcard.  The compile
+        // step must reject this so the footgun cannot reach production.
+        let toml_str = r#"
+[[policies]]
+id = "misconfigured"
+effect = "allow"
+allowed_tools = []
+"#;
+        let err = PolicyConfig::from_toml(toml_str).unwrap_err();
+        assert!(
+            matches!(err, crate::PolicyError::EmptyAllowOnAllEffect { .. }),
+            "allow with empty allowed_tools must be rejected, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn allow_with_explicit_star_wildcard_accepted() {
+        // `["*"]` is the explicit opt-in form for allow wildcards.
+        let toml_str = r#"
+[[policies]]
+id = "explicit-wildcard"
+effect = "allow"
+allowed_tools = ["*"]
+"#;
+        let config = PolicyConfig::from_toml(toml_str).unwrap();
+        assert_eq!(config.policies.len(), 1);
+    }
+
+    #[test]
+    fn allow_with_resource_match_only_accepted() {
+        // Resource-scoped policies do not need an allowed_tools entry; the
+        // resource_match gates them.
+        let toml_str = r#"
+[[policies]]
+id = "resource-scoped"
+effect = "allow"
+resource_match = ["file:///safe/"]
+"#;
+        let config = PolicyConfig::from_toml(toml_str).unwrap();
+        assert_eq!(config.policies.len(), 1);
+    }
+
+    #[test]
+    fn deny_with_empty_allowed_tools_still_accepted() {
+        // Deny can use empty-means-everything as a legitimate catch-all.
+        let toml_str = r#"
+[[policies]]
+id = "deny-all-admin"
+effect = "deny"
+[policies.agent_match]
+trust_level = "basic"
+"#;
+        let config = PolicyConfig::from_toml(toml_str).unwrap();
+        assert_eq!(config.policies.len(), 1);
+        assert_eq!(config.policies[0].effect, Effect::Deny);
     }
 }
