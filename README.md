@@ -243,12 +243,7 @@ no guaranteed response time.
 
 Contact: [cyrenei@proton.me](mailto:arbitersecurity@proton.me)
 
----
-
-> **Disclaimer:** This project is managed agentically under human supervision.
-
-<details>
-<summary>PGP Public Key</summary>
+## PGP Public Key
 
 ```
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -304,4 +299,6 @@ bLcV4f20Wa7wB4CHB3RVQjhnVzPa2DwUUvDI/xLAoXoV7KRUYMbe9oSgk01D2tJF
 -----END PGP PUBLIC KEY BLOCK-----
 ```
 
-</details>
+## Project Management
+
+This project is managed agentically under human supervision.
