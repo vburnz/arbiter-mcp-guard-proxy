@@ -61,12 +61,14 @@ it. Arbiter is open-source infrastructure you operate yourself.
 
 Arbiter is designed for scenarios where the platform operator is trusted but the AI agents are not — the operator writes policy, the agents operate within it.
 
-## Disclaimer
+## Disclaimers
 
-**This software is provided AS IS, with no warranty and no support.** Use it
+1. **This software is provided AS IS, with no warranty and no support.** Use it
 at your own risk. There are no paid tiers, no license keys, and no gated
 features. Everything in this repository is free and open source under
 Apache 2.0.
+
+2. Due to resource constraints, this project is currently managed agentically, under close human supervision.
 
 ## Sponsor
 
