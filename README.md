@@ -129,7 +129,13 @@ chain, crate dependency graph, and data flow.
 curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
 ```
 
-Downloads the latest binary for your platform (Linux/macOS, amd64/arm64) with SHA256 verification. Installs both `arbiter` and `arbiter-ctl`. No sudo required.
+Downloads the latest binary for your platform (Linux/macOS, amd64/arm64) with SHA256 verification. Installs both `arbiter` and `arbiter-ctl`. No sudo required. The installer will offer to generate a config file interactively.
+
+To generate a config file separately:
+
+```bash
+curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/configure.sh | sh
+```
 
 To update an existing installation:
 
@@ -139,11 +145,21 @@ arbiter-ctl update
 
 ## Quickstart
 
+**Binary install** (fastest):
+
+```bash
+curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
+# Follow the config wizard, then:
+arbiter --config arbiter.toml
+```
+
+**Docker** (full stack with mock MCP server):
+
 ```bash
 docker compose up --build -d
-curl http://localhost:8080/health           # → OK
+curl http://localhost:8080/health           # -> OK
 curl -X POST http://localhost:3000/agents \
-  -H "x-api-key: arbiter-quickstart-key"  \
+  -H "x-api-key: arbiter-dev-key"          \
   -H "Content-Type: application/json"       \
   -d '{"owner":"user:alice","model":"gpt-4","capabilities":["read"],"trust_level":"basic"}'
 ```
@@ -152,38 +168,24 @@ Full walkthrough: [Quickstart](docs/sphinx/getting-started/quickstart.md)
 
 ## Configuration
 
-Single TOML file with sections for each subsystem:
+Single TOML file. The fastest way to generate one:
+
+```bash
+curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/configure.sh | sh
+```
+
+Or write it by hand. Here's the minimal viable config:
 
 ```toml
 [proxy]
-listen_port = 8080
-upstream_url = "http://mcp-server:8081"
-
-[oauth]
-# jwks_cache_ttl_secs = 3600
-# [[oauth.issuers]]
-# ...
-
-[policy]
-file = "policies.toml"
-
-[sessions]
-default_time_limit_secs = 3600
-default_call_budget = 1000
-max_concurrent_sessions_per_agent = 10
-
-[audit]
-enabled = true
-file_path = "/var/log/arbiter/audit.jsonl"
-redaction_patterns = ["password", "secret", "token"]
+upstream_url = "http://your-mcp-server:8081"
 
 [admin]
-listen_port = 3000
-# api_key loaded from ARBITER_ADMIN_API_KEY env var (recommended)
-# signing_secret loaded from ARBITER_SIGNING_SECRET env var (recommended)
+api_key = "your-secure-api-key"           # or set ARBITER_ADMIN_API_KEY env var
+signing_secret = "your-secure-secret"     # or set ARBITER_SIGNING_SECRET env var
 ```
 
-See [arbiter.example.toml](arbiter.example.toml) for the full reference.
+Everything else has sensible defaults (sessions enabled, audit on, deny-by-default policies). See [arbiter.example.toml](arbiter.example.toml) for the full reference with all sections documented.
 
 ## Policy Language
 

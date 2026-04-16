@@ -8,7 +8,15 @@ Five minutes from install to your first proxied tool call.
 $ curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
 ```
 
-This downloads the latest Arbiter binary for your platform (Linux or macOS, amd64 or arm64), verifies its SHA256 checksum, and installs it to `~/.arbiter/bin`. To pin a version:
+This downloads the latest Arbiter binary for your platform (Linux or macOS, amd64 or arm64), verifies its SHA256 checksum, and installs it to `~/.arbiter/bin`. The installer will offer to generate a config file interactively.
+
+To generate a config file separately:
+
+```bash
+$ curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/configure.sh | sh
+```
+
+To pin a version:
 
 ```bash
 $ ARBITER_VERSION=v0.5.0 curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh

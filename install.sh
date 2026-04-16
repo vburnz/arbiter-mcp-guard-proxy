@@ -120,6 +120,44 @@ main() {
     fi
 
     printf "\nVerify: arbiter --version\n"
+
+    # Offer to run the configuration wizard.
+    offer_configure
+}
+
+offer_configure() {
+    if [ ! -t 0 ]; then
+        printf "\nTo generate a config file, run:\n"
+        printf "  curl -sSf https://raw.githubusercontent.com/${REPO}/main/configure.sh | sh\n\n"
+        return
+    fi
+
+    printf "\n"
+    printf "Would you like to generate an arbiter.toml config file now? [y/N] "
+    read -r _answer </dev/tty
+    case "$_answer" in
+        [yY]|[yY][eE][sS])
+            local _configure_url="https://raw.githubusercontent.com/${REPO}/main/configure.sh"
+            local _configure_tmp
+            _configure_tmp="$(mktemp)"
+            printf "Downloading configuration wizard...\n"
+            if curl -sSfL "$_configure_url" -o "$_configure_tmp" 2>/dev/null; then
+                sh "$_configure_tmp"
+                rm -f "$_configure_tmp"
+            else
+                printf "Could not download configure.sh. You can run it manually:\n"
+                printf "  curl -sSf %s | sh\n" "$_configure_url"
+                rm -f "$_configure_tmp"
+            fi
+            ;;
+        *)
+            printf "\nTo configure later:\n"
+            printf "  curl -sSf https://raw.githubusercontent.com/${REPO}/main/configure.sh | sh\n"
+            printf "\nOr copy and edit the example config:\n"
+            printf "  curl -sSfL https://raw.githubusercontent.com/${REPO}/main/arbiter.example.toml -o arbiter.toml\n"
+            printf "\n"
+            ;;
+    esac
 }
 
 detect_os() {

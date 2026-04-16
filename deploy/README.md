@@ -28,10 +28,16 @@ The fastest path. Downloads a pre-built binary with SHA256 verification.
 curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
 ```
 
-Then configure and run:
+The installer will offer to run the configuration wizard, which generates a working `arbiter.toml` interactively. If you skip it, you can run it later:
 
 ```bash
-cp deploy/arbiter.toml ./arbiter.toml
+curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/configure.sh | sh
+```
+
+Or download the example config and edit it manually:
+
+```bash
+curl -sSfL https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/arbiter.example.toml -o arbiter.toml
 # Edit arbiter.toml: set upstream_url, api_key, and signing_secret
 arbiter --config arbiter.toml
 ```
@@ -104,9 +110,8 @@ curl https://your-app.up.railway.app/health
 Best for self-hosted environments, local development, or air-gapped networks.
 
 ```bash
-# 1. Copy the starter config and edit to taste
-cp deploy/arbiter.toml ./arbiter.toml
-# Edit arbiter.toml: set upstream_url, api_key, and signing_secret
+# 1. Generate a config file (or edit deploy/arbiter.toml manually)
+./configure.sh --output arbiter.toml
 
 # 2. Start Arbiter
 docker compose -f deploy/docker-compose.quickstart.yml up -d
@@ -158,25 +163,27 @@ See `arbiter.toml` comments for full documentation of every field. For the compl
 After deploying with any option, run this sequence to verify the full pipeline:
 
 ```bash
-# Set your endpoint (adjust for your platform)
+# Set your endpoint (adjust for your platform and config).
+# If you used deploy/arbiter.toml, admin is on port 9090.
+# If you used the config wizard or arbiter.example.toml, admin is on port 3000.
 ARBITER=http://localhost:8080
 ADMIN=http://localhost:9090
-API_KEY=arbiter-dev-key  # or your production key
+API_KEY="your-admin-api-key"  # from your arbiter.toml or ARBITER_ADMIN_API_KEY env var
 
 # 1. Health check
 curl -s $ARBITER/health
 
 # 2. Register an agent
 curl -s -X POST $ADMIN/agents \
-  -H "Authorization: Bearer $API_KEY" \
+  -H "x-api-key: $API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"name": "test-agent", "trust_level": "Basic"}'
+  -d '{"owner": "user:alice", "model": "gpt-4", "capabilities": ["read"], "trust_level": "basic"}'
 
 # 3. Create a session (use the agent_id from step 2)
 curl -s -X POST $ADMIN/sessions \
-  -H "Authorization: Bearer $API_KEY" \
+  -H "x-api-key: $API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"agent_id": "AGENT_ID_HERE", "intent": "read and analyze data"}'
+  -d '{"agent_id": "AGENT_ID_HERE", "declared_intent": "read and analyze data", "authorized_tools": ["query"]}'
 
 # 4. Make an MCP call through the proxy (use the session_id from step 3)
 curl -s -X POST $ARBITER/ \

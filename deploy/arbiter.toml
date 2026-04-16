@@ -133,7 +133,7 @@ allowed_tools = [
     "deploy",
 ]
 [policy.policies.agent_match]
-trust_level = "Verified"
+trust_level = "verified"
 
 # Rule 3: Deny destructive operations for all agents below Trusted.
 # Delete, drop, and admin operations require the highest trust level.
@@ -163,4 +163,4 @@ allowed_tools = [
     "modify_permissions",
 ]
 [policy.policies.agent_match]
-trust_level = "Trusted"
+trust_level = "trusted"
