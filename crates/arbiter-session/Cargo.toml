@@ -11,7 +11,7 @@ categories.workspace = true
 description = "Task session management with budget and tool whitelisting for Arbiter"
 
 [dependencies]
-arbiter-storage = { path = "../arbiter-storage", version = "0.0.11" }
+arbiter-storage = { path = "../arbiter-storage", version = "0.1.0" }
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
