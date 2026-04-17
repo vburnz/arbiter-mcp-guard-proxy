@@ -1,7 +1,7 @@
 # Arbiter: Firewall for MCP
 
 [![CI](https://github.com/cyrenei/arbiter-mcp-firewall/actions/workflows/ci.yml/badge.svg)](https://github.com/cyrenei/arbiter-mcp-firewall/actions/workflows/ci.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
 [![Donate](https://img.shields.io/badge/Sponsor-♡-ff69b4)](https://github.com/sponsors/cyrenei)
 
 A lightweight proxy that sits between AI agents and MCP (Model Context Protocol) servers, enforcing
@@ -66,7 +66,7 @@ Arbiter is designed for scenarios where the platform operator is trusted but the
 1. **This software is provided AS IS, with no warranty and no support.** Use it
 at your own risk. There are no paid tiers, no license keys, and no gated
 features. Everything in this repository is free and open source under
-Apache 2.0.
+GPL-3.0-or-later.
 
 2. Due to resource constraints, this project is currently managed agentically, under close human supervision. Take that as you will.
 
@@ -236,7 +236,9 @@ This project is provided as-is.
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[GNU General Public License v3.0 or later](LICENSE)
+
+Releases `v0.0.11` and earlier were published under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). Starting with `v0.1.0`, the project is licensed under GPL-3.0-or-later. Prior releases retain their original Apache-2.0 terms; the license change applies to the `v0.1.0` codebase and all subsequent work. Inbound contributions are accepted under the project's outbound license (GPL-3.0-or-later).
 
 ## Support
 

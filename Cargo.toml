@@ -5,12 +5,12 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.11"
+version = "0.1.0"
 edition = "2024"
-license = "Apache-2.0"
+license = "GPL-3.0-or-later"
 authors = ["Cyrene Ireland"]
 description = "MCP tool-call firewall: deny-by-default authorization, session management, drift detection, and audit for every tool call"
-repository = "https://github.com/cyrenei/arbiter-mcp-firewall"
+repository = "https://github.com/cyrenei/mcp-proxy-firewall"
 homepage = "https://cyrenei.github.io/arbiter-mcp-firewall"
 keywords = ["mcp", "firewall", "proxy", "security", "ai-agent"]
 categories = ["authentication", "network-programming"]
