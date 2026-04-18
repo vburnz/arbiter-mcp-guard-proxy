@@ -389,7 +389,7 @@ impl PolicyConfig {
             .enumerate()
             .map(|(i, p)| (i, p.specificity()))
             .collect();
-        sorted.sort_by(|a, b| b.1.cmp(&a.1)); // highest specificity first
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.1)); // highest specificity first
 
         for i in 0..sorted.len() {
             for j in (i + 1)..sorted.len() {
