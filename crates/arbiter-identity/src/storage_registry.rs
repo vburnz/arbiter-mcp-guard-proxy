@@ -435,9 +435,7 @@ impl AgentRegistry for StorageBackedRegistry {
                 let Ok(agent) = self.agent_store.get_agent(child).await else {
                     continue;
                 };
-                if agent.active
-                    && self.agent_store.deactivate_agent(child).await.is_ok()
-                {
+                if agent.active && self.agent_store.deactivate_agent(child).await.is_ok() {
                     tracing::info!(
                         agent_id = %child,
                         cascade_from = %id,
