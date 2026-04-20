@@ -1,7 +1,7 @@
 # Introduction
 I generated this repository using Claude Code after running into issues with the agent loop applifying hallucinated responses which led towards dangerous outcomes.
 
-I didn't write it myself. It seemed worth sharing. Take it as you want
+I didn't write it myself. It seems useful and worth sharing. Take it as you will. The rest of the text in this repo is AI-generated.
 
 # Arbiter: Firewall for MCP
 
