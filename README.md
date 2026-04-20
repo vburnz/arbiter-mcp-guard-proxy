@@ -1,3 +1,8 @@
+# Introduction
+I generated this repository using Claude Code after running into issues with the agent loop applifying hallucinated responses which led towards dangerous outcomes.
+
+I didn't write it myself. It seemed worth sharing. Take it as you want
+
 # Arbiter: Firewall for MCP
 
 [![CI](https://github.com/cyrenei/arbiter-mcp-firewall/actions/workflows/ci.yml/badge.svg)](https://github.com/cyrenei/arbiter-mcp-firewall/actions/workflows/ci.yml)
