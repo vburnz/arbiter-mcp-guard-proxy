@@ -433,16 +433,17 @@ impl AgentRegistry for StorageBackedRegistry {
             for child in children {
                 // Check if still active before deactivating.
                 match self.agent_store.get_agent(child).await {
-                    Ok(agent) if agent.active => {
-                        if self.agent_store.deactivate_agent(child).await.is_ok() {
-                            tracing::info!(
-                                agent_id = %child,
-                                cascade_from = %id,
-                                "cascade deactivated agent (storage-backed)"
-                            );
-                            deactivated.push(child);
-                            to_process.push(child);
-                        }
+                    Ok(agent)
+                        if agent.active
+                            && self.agent_store.deactivate_agent(child).await.is_ok() =>
+                    {
+                        tracing::info!(
+                            agent_id = %child,
+                            cascade_from = %id,
+                            "cascade deactivated agent (storage-backed)"
+                        );
+                        deactivated.push(child);
+                        to_process.push(child);
                     }
                     _ => {}
                 }
