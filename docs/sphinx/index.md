@@ -1,6 +1,6 @@
 # Arbiter
 
-[![Donate](https://img.shields.io/badge/Sponsor-♡-ff69b4)](https://github.com/sponsors/cyrenei)
+[![Donate](https://img.shields.io/badge/Sponsor-♡-ff69b4)](https://github.com/sponsors/samanthaci)
 
 **MCP tool-call firewall.** Arbiter governs what agents are allowed to do. It does not govern what agents try to do. It protects the platform by reducing the tool-call attack surface.
 
@@ -54,9 +54,9 @@ Arbiter is free and always will be. If you want to throw a few dollars our way,
 it goes straight to wet food for the office kitten, who has somehow developed a
 taste for the high-end stuff.
 
-**[Sponsor on GitHub](https://github.com/sponsors/cyrenei)**
+**[Sponsor on GitHub](https://github.com/sponsors/samanthaci)**
 
-Contact: [arbitersecurity@proton.me](mailto:arbitersecurity@proton.me) ([PGP Public Key](https://cyrenei.github.io/arbiter-mcp-firewall/pub-key.asc))
+Contact: [arbitersecurity@proton.me](mailto:arbitersecurity@proton.me) ([PGP Public Key](https://samanthaci.github.io/arbiter-mcp-firewall/pub-key.asc))
 
 ```{toctree}
 :maxdepth: 2

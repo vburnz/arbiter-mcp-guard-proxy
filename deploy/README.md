@@ -25,7 +25,7 @@ Get from zero to running proxy in under 3 minutes. Pick your platform:
 The fastest path. Downloads a pre-built binary with SHA256 verification.
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
+curl -sSf https://raw.githubusercontent.com/samanthaci/arbiter-mcp-firewall/main/install.sh | sh
 ```
 
 Then configure and run:
@@ -133,7 +133,7 @@ curl http://localhost:8080/health
 
 ### Notes
 
-- The quickstart compose file uses `ghcr.io/cyrenei/arbiter:latest` by default. Add `--build` to build from source instead.
+- The quickstart compose file uses `ghcr.io/samanthaci/arbiter:latest` by default. Add `--build` to build from source instead.
 - Mount your own `arbiter.toml` to `/etc/arbiter/config.toml` for custom configuration.
 - For production, change the `api_key` and `signing_secret` in `arbiter.toml` and set `ADMIN_KEY` to a secure value.
 

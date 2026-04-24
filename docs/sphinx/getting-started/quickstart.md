@@ -5,13 +5,13 @@ Five minutes from install to your first proxied tool call.
 ## Install the Binary
 
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
+$ curl -sSf https://raw.githubusercontent.com/samanthaci/arbiter-mcp-firewall/main/install.sh | sh
 ```
 
 This downloads the latest Arbiter binary for your platform (Linux or macOS, amd64 or arm64), verifies its SHA256 checksum, and installs it to `~/.arbiter/bin`. To pin a version:
 
 ```bash
-$ ARBITER_VERSION=v0.5.0 curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
+$ ARBITER_VERSION=v0.5.0 curl -sSf https://raw.githubusercontent.com/samanthaci/arbiter-mcp-firewall/main/install.sh | sh
 ```
 
 ## Or: Run with Docker Compose
@@ -24,7 +24,7 @@ If you prefer Docker, this gets a full gateway running with a mock MCP server an
 - `curl` and optionally `jq` for readability
 
 ```bash
-$ git clone https://github.com/cyrenei/arbiter-mcp-firewall.git
+$ git clone https://github.com/samanthaci/arbiter-mcp-firewall.git
 $ cd arbiter
 $ docker compose up --build -d
 ```
