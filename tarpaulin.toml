@@ -31,4 +31,4 @@ exclude-files = [
 ignore-tests = true
 
 # Per-test timeout — property tests under instrumentation need headroom
-timeout = "120s"
+timeout = "300s"
