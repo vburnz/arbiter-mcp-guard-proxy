@@ -359,9 +359,7 @@ fn matches_tool(policy: &Policy, request: &McpRequest) -> bool {
     // and never reach here; `["*"]` is the explicit opt-in form required for
     // Allow wildcards, so operators who write `allowed_tools = []` by mistake
     // get an error instead of silent blanket access.
-    if policy.allowed_tools.is_empty()
-        || policy.allowed_tools.iter().any(|t| t == "*")
-    {
+    if policy.allowed_tools.is_empty() || policy.allowed_tools.iter().any(|t| t == "*") {
         return matches_resource_uri(policy, request);
     }
 
