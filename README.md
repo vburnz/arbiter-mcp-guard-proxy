@@ -245,7 +245,7 @@ Releases `v0.0.11` and earlier were published under [Apache License 2.0](https:/
 [GitHub Issues](https://github.com/cyrenei/arbiter-mcp-firewall/issues), no SLA,
 no guaranteed response time.
 
-Contact: [cyrenei@proton.me](mailto:arbitersecurity@proton.me)
+Contact: [samantha.ireland@pm.me](mailto:samantha.ireland@pm.me)
 
 ## PGP Public Key
 
