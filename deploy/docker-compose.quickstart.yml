@@ -16,7 +16,7 @@
 
 services:
   arbiter:
-    image: ghcr.io/cyrenei/arbiter:latest
+    image: ghcr.io/samanthaci/arbiter:latest
     build:
       context: ..
       dockerfile: Dockerfile

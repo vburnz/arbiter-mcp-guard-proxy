@@ -7,7 +7,7 @@ Arbiter ships as a single binary or a Docker image. This guide covers all paths,
 The fastest way to get Arbiter on any Linux or macOS machine:
 
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
+$ curl -sSf https://raw.githubusercontent.com/samanthaci/arbiter-mcp-firewall/main/install.sh | sh
 ```
 
 The installer detects your platform, downloads the correct binary from GitHub Releases, verifies the SHA256 checksum, and installs to `~/.arbiter/bin`. Both `arbiter` (proxy) and `arbiter-ctl` (management CLI) are installed. No sudo required.
@@ -19,13 +19,13 @@ If [minisign](https://jedisct1.github.io/minisign/) is installed, the script als
 To pin a specific version:
 
 ```bash
-$ ARBITER_VERSION=v0.5.0 curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
+$ ARBITER_VERSION=v0.5.0 curl -sSf https://raw.githubusercontent.com/samanthaci/arbiter-mcp-firewall/main/install.sh | sh
 ```
 
 To install to a custom directory:
 
 ```bash
-$ ARBITER_INSTALL_DIR=/usr/local/bin curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
+$ ARBITER_INSTALL_DIR=/usr/local/bin curl -sSf https://raw.githubusercontent.com/samanthaci/arbiter-mcp-firewall/main/install.sh | sh
 ```
 
 Then run:
@@ -39,7 +39,7 @@ $ arbiter --config arbiter.toml --log-level info
 The included `docker-compose.yml` runs the full stack:
 
 ```bash
-$ git clone https://github.com/cyrenei/arbiter-mcp-firewall.git
+$ git clone https://github.com/samanthaci/arbiter-mcp-firewall.git
 $ cd arbiter
 $ docker compose up --build -d
 ```

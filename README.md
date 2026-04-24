@@ -1,8 +1,8 @@
 # Arbiter: Firewall for MCP
 
-[![CI](https://github.com/cyrenei/arbiter-mcp-firewall/actions/workflows/ci.yml/badge.svg)](https://github.com/cyrenei/arbiter-mcp-firewall/actions/workflows/ci.yml)
+[![CI](https://github.com/samanthaci/arbiter-mcp-firewall/actions/workflows/ci.yml/badge.svg)](https://github.com/samanthaci/arbiter-mcp-firewall/actions/workflows/ci.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
-[![Donate](https://img.shields.io/badge/Sponsor-♡-ff69b4)](https://github.com/sponsors/cyrenei)
+[![Donate](https://img.shields.io/badge/Sponsor-♡-ff69b4)](https://github.com/sponsors/samanthaci)
 
 A lightweight proxy that sits between AI agents and MCP (Model Context Protocol) servers, enforcing
 deny-by-default authorization, session budgets, drift detection, and
@@ -27,7 +27,7 @@ Arbiter is agnostic of development tooling and enforces:
 - **That you'll know** (structured audit trail of every decision)
 
 See [Why MCP Tool Calls Need a Firewall](docs/sphinx/understanding/why-agent-iam.md) for the full argument, or
-the [QuantumBank case study](https://cyrenei.github.io/arbiter-mcp-firewall/case-study.html) for a worked example
+the [QuantumBank case study](https://samanthaci.github.io/arbiter-mcp-firewall/case-study.html) for a worked example
 showing 2 allowed and 4 blocked tool categories.
 
 ## Limitations
@@ -74,7 +74,7 @@ GPL-3.0-or-later.
 
 This is free software with no paid tiers. If you get value from it and want to help keep it going, consider sponsoring.
 
-**[Sponsor on GitHub](https://github.com/sponsors/cyrenei)**
+**[Sponsor on GitHub](https://github.com/sponsors/samanthaci)**
 
 ## Features
 
@@ -124,7 +124,7 @@ chain, crate dependency graph, and data flow.
 ## Install
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
+curl -sSf https://raw.githubusercontent.com/samanthaci/arbiter-mcp-firewall/main/install.sh | sh
 ```
 
 Downloads the latest binary for your platform (Linux/macOS, amd64/arm64) with SHA256 verification. Installs both `arbiter` and `arbiter-ctl`. No sudo required.
@@ -229,7 +229,7 @@ cargo build --release
 
 The core enforcement pipeline (policy engine, session management, drift
 detection, audit logging) is complete and tested. The
-[QuantumBank scenario](https://cyrenei.github.io/arbiter-mcp-firewall/case-study.html) demonstrates end-to-end
+[QuantumBank scenario](https://samanthaci.github.io/arbiter-mcp-firewall/case-study.html) demonstrates end-to-end
 enforcement across 6 tool categories.
 
 This project is provided as-is.
@@ -242,63 +242,8 @@ Releases `v0.0.11` and earlier were published under [Apache License 2.0](https:/
 
 ## Support
 
-[GitHub Issues](https://github.com/cyrenei/arbiter-mcp-firewall/issues), no SLA,
+[GitHub Issues](https://github.com/samanthaci/arbiter-mcp-firewall/issues), no SLA,
 no guaranteed response time.
 
 Contact: [samantha.ireland@pm.me](mailto:samantha.ireland@pm.me)
 
-## PGP Public Key
-
-```
------BEGIN PGP PUBLIC KEY BLOCK-----
-
-mQINBGnOrhwBEADBmm+E32so/TXRESDEto8loOpNb2mjdzm7BxO2xHinnQucadJe
-7bEG45m5R6sJIVFdBy9URJHy3bwpqDiL+XjzHB9jHynYZZ/j1KjOelmcAIxm0C24
-s2cHUOTDc3eZpUD5Tcv3DlmmdTsb4giXmUOsDsdds+k9iE4UDedTJ6P7aYLUWY6k
-9nZUoqc1CLwD5nR23+gFXRt6QB9wv8/nM+4UtJit818BVZQS8gEH7Cc+x3ScXd0d
-gckl0z8KdtostX2MMYBGSHj2nit1zjSkowUE3F2hdtK5PDtKQztvlbzx5WJGzGU1
-73mfN8JWPBXV0m3UmPIrjihmEUfzacCmlGB45MLpxiNY96BXi/bOnNjILy/9U9Ol
-eTriOu9Qg4h7slPLc/+xdmF0olsutjd9yQtGKsJGTk1dVqWV2bKV03d0andHYpdy
-bW5toCO86QkP2iowb9CLMQlC8kXc7/3QbxgoTmHxKvQaiUWSPsqyDfyEmwAlDO2x
-8PuahSZ0f9mj0nd/WMfAItHhx2ZY/WVjYuBKo4ELSa0+ctU+vYdIi66OEsXoa0BE
-Rs03a5QaC3Ye1u8d4zl1gGSPGdPw0cCbCvKpy8IyhQnL7g5z8bwYcfVO9uuZOrnf
-no917NK2U9b3Nj5cbwiYPxQPZePJtkS24PD5Nz5Ts5knLsJIlNqmFsY2nwARAQAB
-tBpDeXJlbmUgPGN5cmVuZWlAcHJvdG9uLm1lPokCUQQTAQoAOxYhBNyFHps04i82
-OsbVBR8CRhF7z5B+BQJpzq4cAhsDBQsJCAcCAiICBhUKCQgLAgQWAgMBAh4HAheA
-AAoJEB8CRhF7z5B+OfMQAJBxmnAQW6aL1VJxVg+cG/BRlAI/vut7Q3Zq9H+IW7ja
-ywYl3WWI3/DdB7pVLYR5U51YIEDtxny2fCve3pqJbXVJFhiP5TfeDhg91Sd0UTVp
-iZL9mrE98nz/8xmXq1VhGz6iyT3DidMM9bWXQ4XeA32BTIYPA8IGVTQsMbN0LMy/
-jhoWISFkv3Kgy36b4ubozgdXgvWpwcu+ntWUr8sx+Gu1GLY8DwFrUti8CMpUf2BR
-YGW8RRtuKrqqeco+Q+lQEekCjgyr6V8M4JhWnUan/33mnD5dPvb0R4bME1Bo+qQU
-2QbwBN0b5Og9AvTr6aLaytLHxQ1/8DbvVG9PghpS+hWwKkbESC+ItBpIegN+2X+W
-cSfqOX/rpLm7EfNVx1A9Px37oWbBl9gIEdJXBQISGCs2gqWiL0IG026rYaKXn6WD
-a2RERTNjKnNd2Gp1w47TdT6ZiPnCkYwm2geRKl5lamj/q/82sTCWQ9q6+iAxuf06
-GUyWgQ8i0r2t8+pxmzU5sWSYedA29nU4pkPdX2zQ3xBbyXlJUfgo6m3XC5t665wy
-NlW6QnMM+NmYgr9JhXcsOs3zyPbLwiP+JYUFqi80YQxo0EmsorE7OOzgfg678l0y
-oVwSaL29ot0Kj0Y/NLCvmEQhVFyB2ivKOtRoHVTIoxeZFGr9sTWHoPnod0m7jt2f
-uQINBGnOrhwBEADDQYoqfXAxgkrJoOw6fCyZEQWyx6xUnJGYxJ41Ac3oxKYPyXgW
-++rlY/ov2X7xprctmUHgp0xOVgWn5/0EzDeibC/OsWeVIdphzT8Fh4J3KgdLUfUJ
-+i8aBZscJC7LFVB69f6dGuh21or/j+tQFyldojHA+Vjuij+GuWV5AK2KpW0g4riQ
-8FJDxtMNdG5C8WdSWZxTYD4HmdJD4dYXm3cEPFKV9ynWMzlviItS1dn/RL1CWaso
-87TciaIwh5js/ne7wSfRi0/tdO6E+Bn9uJ8H+tAPXacDxng3kYq1KN5kkiZL8bg7
-C388X2OXRlfImGCq5VGf4hP+x7JCIxE1ytsiXexcercxiyJllh7sQeNQZ0sirF09
-SvfbymJWuKwDOqrlL55+NHNMjvG2SSGk3qYBmjNkIQlc109bASRPUC1Vn9tkLFMH
-Byo+vmVw7RYBgWS7mrxSucy8YOAQ2BQSIdwzukldEg0tY/I6vLeOe5yIqaeHyPw+
-OhTWGBhW+znMVDAFU6/z2WjufUBDhP7618EYzAEoeQ8UOvVJCvg0CYL29F9twWyt
-4YvVNYlLG6z0LXa/2zh2uhU6UmfonCcWTnalOhOQ/6ldrzEhbuZn+Oei0C7PUmeO
-riScRMbcBv9prA6QODTHW4y44j3QaNb5Wdt+HRoXqsratFgTcdOub8s/RwARAQAB
-iQI2BBgBCgAgFiEE3IUemzTiLzY6xtUFHwJGEXvPkH4FAmnOrhwCGwwACgkQHwJG
-EXvPkH6uZg/8DaFmVbwOrL5EDctmkuZ4hZJUe+vWWhWEcAswkvQRZKZ2uCLWwgDa
-+CY7bmpl2Y6zCAtCYZYuLOoI1V6dT04HCzmoBgVJnqOCIO6+tLJOLfkN+9jylmAy
-VXEfo31OXHpGdPnhtD+wKG/DniI31opaKpjTKRqiQjJkFnwylSP4bShRtoqTuyLC
-oPsUChW5qq60OpVbweAuMAY20i9UC+Ooqx2OQlqckfIYimZidvfb04ucUOtK2IK6
-0yIjAtgmDkyifmOcG0xacadF6OwMnudcncxkVDXVhJ20panMT3cCFemeN2gq+7Vf
-pjeqrRpTODQumYKgI9PtQ4ul7IRYXlqcvPUu2PTqQ2l0jPv1LqVl44jVQtWMPd6z
-dUyDPHVWNm5F7N70E8G7TcXer/nSFprnJLYXIWFF4ZiKq6c74YqVrP6pc6diIqon
-zI3K4/4BlRIh5LrGDWen1cGPIENfrJgTZLUCQcqYZ3hbTtuM0icBJnc2ZyZVRMws
-cRU5po1G87Oe96Rc8tS1NWSHUXmp6fTvxG7Kek+g9nCHUH6udUHZtXQLI3lRW6ZZ
-bLcV4f20Wa7wB4CHB3RVQjhnVzPa2DwUUvDI/xLAoXoV7KRUYMbe9oSgk01D2tJF
-3XQbjmhFHM8XYck6lF1PQAv6iiceTQmd6WpltoO6xwjKOJkT4tSrF/E=
-=gMhW
------END PGP PUBLIC KEY BLOCK-----
-```

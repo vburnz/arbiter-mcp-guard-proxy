@@ -1,6 +1,6 @@
 #!/bin/sh
 # Arbiter installer — downloads a pre-built binary from GitHub Releases.
-# Usage: curl -sSf https://raw.githubusercontent.com/cyrenei/arbiter-mcp-firewall/main/install.sh | sh
+# Usage: curl -sSf https://raw.githubusercontent.com/samanthaci/arbiter-mcp-firewall/main/install.sh | sh
 #
 # Environment variables:
 #   ARBITER_VERSION      — version to install (default: latest)
@@ -9,7 +9,7 @@
 
 set -eu
 
-REPO="cyrenei/arbiter-mcp-firewall"
+REPO="samanthaci/arbiter-mcp-firewall"
 INSTALL_DIR="${ARBITER_INSTALL_DIR:-$HOME/.arbiter/bin}"
 
 # Minisign public key for signature verification.

@@ -10,8 +10,8 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 authors = ["Samantha Ireland"]
 description = "MCP tool-call firewall: deny-by-default authorization, session management, drift detection, and audit for every tool call"
-repository = "https://github.com/cyrenei/mcp-proxy-firewall"
-homepage = "https://cyrenei.github.io/arbiter-mcp-firewall"
+repository = "https://github.com/samanthaci/arbiter-mcp-firewall"
+homepage = "https://samanthaci.github.io/arbiter-mcp-firewall"
 keywords = ["mcp", "firewall", "proxy", "security", "ai-agent"]
 categories = ["authentication", "network-programming"]
 

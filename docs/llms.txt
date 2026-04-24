@@ -9,9 +9,9 @@ Sits between AI agents and MCP (Model Context Protocol) servers, enforcing deny-
 - Language: Rust
 - License: Apache-2.0
 - Author: Samantha Ireland
-- Repository: https://github.com/cyrenei/arbiter
-- Documentation: https://cyrenei.github.io/arbiter-mcp-firewall/docs/
-- Homepage: https://cyrenei.github.io/arbiter-mcp-firewall/
+- Repository: https://github.com/samanthaci/arbiter-mcp-firewall
+- Documentation: https://samanthaci.github.io/arbiter-mcp-firewall/docs/
+- Homepage: https://samanthaci.github.io/arbiter-mcp-firewall/
 
 ## What Arbiter Does
 
@@ -52,10 +52,10 @@ Arbiter is a Rust workspace with 14 specialized crates: arbiter (integration bin
 
 ## Links
 
-- Quickstart: https://cyrenei.github.io/arbiter-mcp-firewall/docs/getting-started/quickstart.html
-- Architecture: https://cyrenei.github.io/arbiter-mcp-firewall/docs/understanding/architecture.html
-- Policy language: https://cyrenei.github.io/arbiter-mcp-firewall/docs/guides/policy.html
-- Security model: https://cyrenei.github.io/arbiter-mcp-firewall/docs/understanding/security-model.html
-- Attack scenarios: https://cyrenei.github.io/arbiter-mcp-firewall/docs/reference/attack-scenarios.html
-- Case study: https://cyrenei.github.io/arbiter-mcp-firewall/case-study.html
-- Comparison with alternatives: https://cyrenei.github.io/arbiter-mcp-firewall/compare.html
+- Quickstart: https://samanthaci.github.io/arbiter-mcp-firewall/docs/getting-started/quickstart.html
+- Architecture: https://samanthaci.github.io/arbiter-mcp-firewall/docs/understanding/architecture.html
+- Policy language: https://samanthaci.github.io/arbiter-mcp-firewall/docs/guides/policy.html
+- Security model: https://samanthaci.github.io/arbiter-mcp-firewall/docs/understanding/security-model.html
+- Attack scenarios: https://samanthaci.github.io/arbiter-mcp-firewall/docs/reference/attack-scenarios.html
+- Case study: https://samanthaci.github.io/arbiter-mcp-firewall/case-study.html
+- Comparison with alternatives: https://samanthaci.github.io/arbiter-mcp-firewall/compare.html
