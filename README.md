@@ -8,6 +8,8 @@ A lightweight proxy that sits between AI agents and MCP (Model Context Protocol)
 deny-by-default authorization, session budgets, drift detection, and
 structured auditing on every tool call.
 
+> **Authorship.** This codebase was written by Claude Opus 4.6 under human supervision, as a sanitized adaptation of a private research codebase. See [`AI_AUTHORSHIP.md`](AI_AUTHORSHIP.md).
+
 ## Why?
 
 AI agents act autonomously at machine speed. A single misconfigured agent
@@ -236,9 +238,13 @@ This project is provided as-is.
 
 ## License
 
-[GNU General Public License v3.0 or later](LICENSE)
+GPL-3.0-or-later. All of it. See [`LICENSE`](LICENSE).
+
+The proxy, the admin API, the policy engine, the audit pipeline, the `arbiter-ctl` CLI — every crate in this workspace is GPL-3-or-later. If you embed Arbiter in a larger system, link against its crates, ship a product that depends on it, or fork it into something else, you ship under GPL-3 too. That's the trade.
 
 Releases `v0.0.11` and earlier were published under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). Starting with `v0.1.0`, the project is licensed under GPL-3.0-or-later. Prior releases retain their original Apache-2.0 terms; the license change applies to the `v0.1.0` codebase and all subsequent work. Inbound contributions are accepted under the project's outbound license (GPL-3.0-or-later).
+
+Workspace-level declaration: the root `Cargo.toml` carries `license = "GPL-3.0-or-later"`, inherited by every crate via `license.workspace = true`.
 
 ## Support
 
