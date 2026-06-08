@@ -1,5 +1,5 @@
 [package]
-name = "arbiter-mcp-firewall"
+name = "mcp-gateway-firewall"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

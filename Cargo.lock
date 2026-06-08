@@ -262,7 +262,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "arbiter-mcp-firewall"
+name = "mcp-gateway-firewall"
 version = "0.0.11"
 dependencies = [
  "anyhow",

@@ -1,0 +1,309 @@
+{
+  "cir_version": "1",
+  "emitted_at": "2026-04-17",
+  "compiler": "cuvi",
+  "passes": 2,
+  "flags": {
+    "resist": true,
+    "autonomous": true,
+    "mode": "autonomous"
+  },
+  "mode": "autonomous",
+
+  "intent_raw": "re-release arbiter on github using gh cli as GPLv3 (license migration)",
+
+  "intent_reframed": "Migrate the arbiter / mcp-proxy-firewall repository from Apache-2.0 to GPL-3.0-or-later for all code authored by Veronica Burnz, update all license declarations (LICENSE file, workspace + per-crate Cargo.toml `license` fields, README badge and License section), commit on a dedicated branch off main, open and merge a PR, tag a new semver-bumped release (v0.1.0 proposed — reserve v0.0.x semantics for Apache-2.0 lineage), and publish it via `gh release create` with release notes that explicitly call out the license change and that the v0.0.11 release remains Apache-2.0 licensed in perpetuity.",
+
+  "surfaced_assumptions": [
+    "A0-COPYRIGHT: All code in the repo is authored solely by Veronica Burnz. VERIFIED via `git log` unique authors — all four identities resolve to the same person. No third-party contributors to relicense around.",
+    "A1-TARGET: 'GPLv3' means GPL-3.0-or-later (the `or later` variant) unless the user explicitly wants GPL-3.0-only. Default to -or-later for ecosystem flexibility; flag for confirmation if Pass 0 artifact lands in interactive mode. In autonomous mode: default to GPL-3.0-or-later.",
+    "A2-RERELEASE: 'Re-release' means publish a NEW tag/release under GPL-3.0 — NOT retroactively change v0.0.11. The existing v0.0.11 artifact was published under Apache-2.0 and legally remains so in perpetuity. Migration applies to HEAD and all future releases.",
+    "A3-GHCLI: `gh release create` is the publishing mechanism; not `cargo publish`, not `gh repo edit`. Crates.io is out of scope unless user later invokes it.",
+    "A4-REPO: The repository is `vburnz/mcp-gateway-firewall` on GitHub. Cargo.toml's `repository` field currently points to a stale URL `github.com/vburnz/mcp-gateway-firewall`. Fix this drift as part of the migration, since touching Cargo.toml anyway.",
+    "A5-DEPENDENCIES: GPL-3.0 requires all statically-linked dependencies to be GPL-compatible. Cargo.lock must be audited: any MPL-2.0, LGPL, GPL-2.0-only, or CDDL dependency is a blocker. This audit is a hard gate in Phase 1.",
+    "A6-BRANCH: Current branch `fix/external-lens-audit-2026-04-12` is unrelated; license migration lands on a fresh `license/gpl3-migration` branch cut from `origin/main`."
+  ],
+
+  "unpacked_terms": {
+    "re-release": "cut a new git tag, create a GitHub Release via `gh release create`, attach notes — NOT overwrite v0.0.11",
+    "arbiter": "the project name; the repo is `mcp-proxy-firewall` on GitHub but crates are `arbiter-*`. Treat 'arbiter' as the user's canonical project name.",
+    "gh cli": "`gh release create <tag> --title ... --notes-file ...` — NOT the web UI, NOT `cargo publish`",
+    "GPLv3": "GPL-3.0-or-later (default); SPDX identifier `GPL-3.0-or-later`",
+    "license migration": "LICENSE file replacement + all metadata declarations updated + README prose updated + commit trail preserves the prior Apache-2.0 LICENSE in git history"
+  },
+
+  "criteria": [
+    {
+      "id": "C-001",
+      "name": "Copyright ownership verified",
+      "description": "Confirm no external contributors exist whose code cannot be unilaterally relicensed. Check `git log --format='%ae' | sort -u`; all identities must resolve to the sole copyright holder.",
+      "evidence_type": "mechanical",
+      "threshold": "one human identity across all commits"
+    },
+    {
+      "id": "C-002",
+      "name": "Dependency license compatibility",
+      "description": "All runtime dependencies in Cargo.lock must be GPL-3.0-compatible. Run `cargo tree` or license-check tooling; flag any MPL-2.0, LGPL-2.1, GPL-2.0-only, CDDL, EPL, or proprietary licenses.",
+      "evidence_type": "mechanical",
+      "threshold": "zero incompatible licenses OR documented isolation strategy"
+    },
+    {
+      "id": "C-003",
+      "name": "gh CLI authenticated",
+      "description": "`gh auth status` reports working auth. Currently blocked by invalid GITHUB_TOKEN env var overriding keyring token. Resolve by unsetting in the execution shell.",
+      "evidence_type": "mechanical",
+      "threshold": "`gh api user` returns 200"
+    },
+    {
+      "id": "C-004",
+      "name": "LICENSE file replaced",
+      "description": "LICENSE file contains the full GPL-3.0 text verbatim from gnu.org. Git history retains the Apache-2.0 LICENSE (do not rewrite history).",
+      "evidence_type": "mechanical",
+      "threshold": "diff shows Apache-2.0 removed, GPL-3.0 added in one commit"
+    },
+    {
+      "id": "C-005",
+      "name": "Cargo manifests updated",
+      "description": "Workspace Cargo.toml `license` field = `GPL-3.0-or-later`. All 14 crate-level Cargo.toml files inherit via `license.workspace = true` OR declare `license = \"GPL-3.0-or-later\"` directly. Workspace `repository` field corrected to `https://github.com/vburnz/mcp-gateway-firewall`.",
+      "evidence_type": "mechanical",
+      "threshold": "`grep -r Apache Cargo.toml crates/*/Cargo.toml` returns zero matches"
+    },
+    {
+      "id": "C-006",
+      "name": "README updated",
+      "description": "Three sites: shield badge, prose mention (line 67-69), License section (line 235). Update all to GPL-3.0. Add a short 'License history' subsection noting v0.0.11 and earlier are Apache-2.0.",
+      "evidence_type": "dual",
+      "threshold": "zero 'Apache' matches outside a clearly-labeled history note"
+    },
+    {
+      "id": "C-007",
+      "name": "Migration committed and reviewed",
+      "description": "Changes live on `license/gpl3-migration` branch, committed with a clear commit message citing the license change. Merged to `main` via PR (even if auto-merged by the same user — preserves audit trail).",
+      "evidence_type": "dual",
+      "threshold": "branch pushed, PR opened and merged, `main` contains the migration commit"
+    },
+    {
+      "id": "C-008",
+      "name": "Version bumped",
+      "description": "Workspace version bumped from 0.0.11. Proposed: 0.1.0 (signals breaking licensing change per the 'license is interface' reading of semver). Documented in CHANGELOG or release notes.",
+      "evidence_type": "mechanical",
+      "threshold": "workspace Cargo.toml version != 0.0.11"
+    },
+    {
+      "id": "C-009",
+      "name": "GitHub Release published",
+      "description": "`gh release create v0.1.0` succeeds. Release notes explicitly call out: (a) project is now GPL-3.0-or-later; (b) v0.0.11 and prior remain Apache-2.0; (c) contributor guidelines implicitly change (inbound=outbound, so PRs now inbound-licensed GPL-3.0).",
+      "evidence_type": "mechanical",
+      "threshold": "`gh release view v0.1.0` returns published state with notes present"
+    },
+    {
+      "id": "C-010",
+      "name": "Post-publish verification",
+      "description": "GitHub repo 'License' sidebar (auto-detected by GitHub's licensee tool) shows GPL-3.0. `gh api repos/vburnz/mcp-gateway-firewall --jq .license.key` returns `gpl-3.0`.",
+      "evidence_type": "mechanical",
+      "threshold": "API reports gpl-3.0; may need up to 60s for propagation"
+    }
+  ],
+
+  "tensions": [
+    {
+      "id": "T-001",
+      "name": "Irreversibility vs autonomous speed",
+      "a": "C-009 (publish release)",
+      "b": "C-001..C-006 (pre-publish verification)",
+      "description": "Autonomous mode pressures for uninterrupted execution. License publication is irreversible — once tagged and pushed, forks can propagate. Tension resolves by treating Phase 3 (publish) as a hard verification gate: Phase 2 must fully converge before Phase 3 runs. Do NOT collapse phases.",
+      "disposition": "preserve as structural constraint — phase boundary is load-bearing"
+    },
+    {
+      "id": "T-002",
+      "name": "Copyleft strictness vs ecosystem breadth",
+      "a": "User's explicit GPL-3.0 choice (signals copyleft intent)",
+      "b": "Apache-2.0 permissiveness (current state, broader adoption surface)",
+      "description": "Not the compiler's to resolve. User has chosen. Flag only so /execute --interrogate does not second-guess the choice.",
+      "disposition": "accept — user-driven"
+    },
+    {
+      "id": "T-003",
+      "name": "Naming drift (adjacent to migration, not part of it)",
+      "a": "Cargo.toml repository URL: mcp-gateway-firewall",
+      "b": "Actual remote: mcp-proxy-firewall",
+      "description": "Pre-existing drift surfaced by interrogation. Fixing it is in-scope because Cargo.toml is being touched anyway. Do not expand to repo rename — out of scope.",
+      "disposition": "fold into C-005; defer any repo rename"
+    },
+    {
+      "id": "T-004",
+      "name": "Version bump semantics",
+      "a": "License change is a breaking change for downstream consumers",
+      "b": "semver reserves major bumps for API changes, not legal changes",
+      "description": "There is no canonical semver ruling for license changes. Choosing 0.1.0 (not 1.0.0) signals 'breaking-ish but still pre-1.0' and is defensible. Flag in release notes so consumers know to audit.",
+      "disposition": "resolve to 0.1.0; document rationale in release notes"
+    },
+    {
+      "id": "T-005",
+      "name": "Inbound contributions license",
+      "a": "Prior contributors (none external, but future PRs)",
+      "b": "Project's new outbound license",
+      "description": "After migration, inbound=outbound convention means PRs are implicitly GPL-3.0-licensed. Worth a CONTRIBUTING.md note but out of scope for this migration unless a CONTRIBUTING file already exists.",
+      "disposition": "note in release; check CONTRIBUTING.md existence in Phase 1, add line if present"
+    }
+  ],
+
+  "phases": [
+    {
+      "id": "P1",
+      "name": "Preflight audit",
+      "verification": "epistemic",
+      "handoff": "dense",
+      "covers_criteria": ["C-001", "C-002", "C-003"],
+      "steps": [
+        {
+          "id": "S-101",
+          "name": "Verify sole copyright",
+          "action": "Run `git log --format='%ae' | sort -u`. Confirm all emails map to the single copyright holder. If any external email appears, HALT and write to BLOCKED.md.",
+          "cisa": ["AUDIT_ASSUMPTIONS"],
+          "produces": "copyright-audit.txt"
+        },
+        {
+          "id": "S-102",
+          "name": "Audit dependency licenses",
+          "action": "Run `cargo tree --format '{p} {l}' 2>/dev/null` OR install `cargo-license` and run it. Filter output for licenses incompatible with GPL-3.0: CDDL, EPL, GPL-2.0-only, proprietary. MPL-2.0 is compatible when kept as a separate module. Apache-2.0, MIT, BSD, ISC, Unlicense, CC0 are all GPL-3-compatible.",
+          "cisa": ["DESIGN_FAILURE", "AUDIT_ASSUMPTIONS"],
+          "produces": "dep-license-audit.md",
+          "gate": "zero blocker-licenses OR documented mitigation"
+        },
+        {
+          "id": "S-103",
+          "name": "Fix gh auth",
+          "action": "Diagnose via `gh auth status`. If GITHUB_TOKEN env var is the blocker, document that the execution shell must `unset GITHUB_TOKEN` before any `gh` invocation. Cannot modify parent shell; emit a preamble step for Phase 3.",
+          "cisa": ["MINIMUM_CHANGE"],
+          "produces": "auth-preflight.md"
+        },
+        {
+          "id": "S-104",
+          "name": "Confirm main is the base",
+          "action": "`git fetch origin && git log origin/main..HEAD` on current branch to confirm the active branch does not contain changes that must land on main before license migration. Plan to branch off `origin/main` directly.",
+          "cisa": ["AUDIT_ASSUMPTIONS"]
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Migration patch and merge",
+      "verification": "dual",
+      "handoff": "dense",
+      "covers_criteria": ["C-004", "C-005", "C-006", "C-007", "C-008"],
+      "depends_on": ["P1"],
+      "steps": [
+        {
+          "id": "S-201",
+          "name": "Create migration branch",
+          "action": "`git fetch origin && git checkout -b license/gpl3-migration origin/main`. Do NOT branch from the current fix/external-lens-audit branch.",
+          "cisa": ["MINIMUM_CHANGE"]
+        },
+        {
+          "id": "S-202",
+          "name": "Replace LICENSE with GPL-3.0 text",
+          "action": "Fetch canonical GPL-3.0 text from https://www.gnu.org/licenses/gpl-3.0.txt OR use `curl -sL https://www.gnu.org/licenses/gpl-3.0.txt -o LICENSE`. Verify byte count and SHA-256 against an expected value if available; otherwise verify first/last lines match canonical.",
+          "cisa": ["MINIMUM_CHANGE"],
+          "produces": "LICENSE (modified)"
+        },
+        {
+          "id": "S-203",
+          "name": "Update workspace Cargo.toml",
+          "action": "Edit the root Cargo.toml: set `license = \"GPL-3.0-or-later\"`, bump `version = \"0.1.0\"`, correct `repository = \"https://github.com/vburnz/mcp-gateway-firewall\"`, correct `homepage` if also stale.",
+          "cisa": ["MINIMUM_CHANGE"]
+        },
+        {
+          "id": "S-204",
+          "name": "Propagate to crate manifests",
+          "action": "For each of the 14 crates/*/Cargo.toml: verify it uses `license.workspace = true` OR has an explicit `license =`. If explicit, change to `GPL-3.0-or-later`. Prefer `license.workspace = true` where feasible.",
+          "cisa": ["MINIMUM_CHANGE"]
+        },
+        {
+          "id": "S-205",
+          "name": "Update README.md",
+          "action": "Three edits: (1) badge URL + alt text → GPL-3.0 shield, (2) line ~69 prose → 'GPL-3.0-or-later', (3) License section → link to LICENSE with GPL-3.0 title. Add a one-line history note: 'Releases v0.0.11 and earlier were published under Apache-2.0.'",
+          "cisa": ["CRYSTALIZE_STRUCTURE"]
+        },
+        {
+          "id": "S-206",
+          "name": "Sanity checks",
+          "action": "(a) `cargo check --workspace` compiles. (b) `grep -rn Apache Cargo.toml crates/*/Cargo.toml README.md` returns only history-note matches. (c) `cargo metadata --format-version 1 --no-deps | jq '.packages[].license' | sort -u` returns only GPL-3.0-or-later.",
+          "cisa": ["DESIGN_FAILURE"],
+          "gate": "all three checks pass"
+        },
+        {
+          "id": "S-207",
+          "name": "Commit and push branch",
+          "action": "`git add -A` (license+manifests+README, NOT property_tests.proptest-regressions or diff.diff — exclude those explicitly), commit with message 'License migration: Apache-2.0 → GPL-3.0-or-later' + body explaining v0.0.11-and-earlier retain Apache-2.0. Push to origin.",
+          "cisa": ["MINIMUM_CHANGE"]
+        },
+        {
+          "id": "S-208",
+          "name": "Open and merge PR",
+          "action": "`gh pr create --base main --title ... --body ...`. In autonomous mode, merge immediately via `gh pr merge --squash --delete-branch` once CI green (or without wait if no CI gates). Do NOT force-push.",
+          "cisa": ["MINIMUM_CHANGE"],
+          "gate": "PR merged, main contains migration commit"
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "Tag and release",
+      "verification": "mechanical",
+      "handoff": "sparse",
+      "covers_criteria": ["C-009", "C-010"],
+      "depends_on": ["P2"],
+      "steps": [
+        {
+          "id": "S-301",
+          "name": "Ensure clean gh auth",
+          "action": "In this shell: `unset GITHUB_TOKEN` then `gh auth status` must show keyring token active. Fail fast if not.",
+          "cisa": ["AUDIT_ASSUMPTIONS"]
+        },
+        {
+          "id": "S-302",
+          "name": "Checkout main and tag",
+          "action": "`git checkout main && git pull --ff-only origin main && git tag -a v0.1.0 -m 'Release 0.1.0 — license migration to GPL-3.0-or-later' && git push origin v0.1.0`.",
+          "cisa": ["MINIMUM_CHANGE"]
+        },
+        {
+          "id": "S-303",
+          "name": "Draft release notes",
+          "action": "Write state/release-notes.md with: headline license change, explicit callout that v0.0.11 and prior remain Apache-2.0, inbound=outbound note, version rationale (0.1.0 chosen over 1.0.0 because still pre-1.0), link to gnu.org/licenses/gpl-3.0.html, changelog of non-license changes since v0.0.11.",
+          "cisa": ["CRYSTALIZE_STRUCTURE"]
+        },
+        {
+          "id": "S-304",
+          "name": "Publish release",
+          "action": "`gh release create v0.1.0 --title 'v0.1.0 — License migration to GPL-3.0' --notes-file state/release-notes.md`. Do NOT mark as prerelease. Do NOT attach binaries (none built yet).",
+          "cisa": ["MINIMUM_CHANGE"],
+          "gate": "exit code 0 and URL returned"
+        },
+        {
+          "id": "S-305",
+          "name": "Verify propagation",
+          "action": "`gh api repos/vburnz/mcp-gateway-firewall --jq .license.key` returns `gpl-3.0`. `gh release view v0.1.0` returns the release. Log both to state/convergence-log.md.",
+          "cisa": ["DESIGN_FAILURE"]
+        }
+      ]
+    }
+  ],
+
+  "budget": {
+    "max_steps": 20,
+    "max_retries_per_step": 2,
+    "hard_halts_on": ["C-001 fails", "C-002 fails with no mitigation", "gh auth unresolvable"]
+  },
+
+  "autonomy_directive": "DO NOT ask clarifying questions. DO NOT pause for confirmation WITHIN a phase. DO pause at phase boundaries to run verification. If ambiguous, choose the most reasonable interpretation and document in state/convergence-log.md. If blocked, write BLOCKED.md with the specific blocker and halt. Hard-stop on any of: external contributor detected, GPL-incompatible dependency without mitigation, gh auth unresolvable. License publication is irreversible — treat Phase 3 verification gate as load-bearing; do not proceed from P2→P3 until all P2 criteria green.",
+
+  "handoff_to": "/execute --interrogate",
+
+  "notes_for_executor": [
+    "The `--interrogate` flag chained by the user after `/execute` should apply REOPEN_SOLUTION after P2 converges but BEFORE P3 starts. That is the irreversibility gate. Questions to ask at interrogation: (a) Did I pick 0.1.0 or 1.0.0, and is that documented? (b) Is the LICENSE file verbatim GPL-3.0 with no accidental modifications? (c) Did I remember the history note for Apache-2.0? (d) Is there a CONTRIBUTING.md that needs updating?",
+    "Cargo.lock audit (S-102): if `cargo-license` is not installed, fall back to `cargo tree --prefix none | sort -u` followed by manual spot-check of the top 20 direct deps, then document assumption that transitive Apache/MIT/BSD deps are compatible.",
+    "The working tree currently has untracked `diff.diff` and `crates/arbiter-session/tests/property_tests.proptest-regressions` — DO NOT include these in the migration commit. Leave them untracked.",
+    "If `cargo check --workspace` surfaces pre-existing failures unrelated to the license change, document in state/convergence-log.md and proceed — license migration does not own those failures."
+  ]
+}

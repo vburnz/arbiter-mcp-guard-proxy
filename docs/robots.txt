@@ -1,7 +1,7 @@
 # Arbiter: IAM Gateway for AI Agents
-# https://samanthaci.github.io/arbiter-mcp-firewall/
+# https://vburnz.github.io/mcp-gateway-firewall/
 
 User-agent: *
 Allow: /
 
-Sitemap: https://samanthaci.github.io/arbiter-mcp-firewall/sitemap.xml
+Sitemap: https://vburnz.github.io/mcp-gateway-firewall/sitemap.xml

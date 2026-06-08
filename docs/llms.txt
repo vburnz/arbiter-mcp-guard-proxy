@@ -8,10 +8,10 @@ Sits between AI agents and MCP (Model Context Protocol) servers, enforcing deny-
 
 - Language: Rust
 - License: Apache-2.0
-- Author: Samantha Ireland
-- Repository: https://github.com/samanthaci/arbiter-mcp-firewall
-- Documentation: https://samanthaci.github.io/arbiter-mcp-firewall/docs/
-- Homepage: https://samanthaci.github.io/arbiter-mcp-firewall/
+- Author: Veronica Burnz
+- Repository: https://github.com/vburnz/mcp-gateway-firewall
+- Documentation: https://vburnz.github.io/mcp-gateway-firewall/docs/
+- Homepage: https://vburnz.github.io/mcp-gateway-firewall/
 
 ## What Arbiter Does
 
@@ -52,10 +52,10 @@ Arbiter is a Rust workspace with 14 specialized crates: arbiter (integration bin
 
 ## Links
 
-- Quickstart: https://samanthaci.github.io/arbiter-mcp-firewall/docs/getting-started/quickstart.html
-- Architecture: https://samanthaci.github.io/arbiter-mcp-firewall/docs/understanding/architecture.html
-- Policy language: https://samanthaci.github.io/arbiter-mcp-firewall/docs/guides/policy.html
-- Security model: https://samanthaci.github.io/arbiter-mcp-firewall/docs/understanding/security-model.html
-- Attack scenarios: https://samanthaci.github.io/arbiter-mcp-firewall/docs/reference/attack-scenarios.html
-- Case study: https://samanthaci.github.io/arbiter-mcp-firewall/case-study.html
-- Comparison with alternatives: https://samanthaci.github.io/arbiter-mcp-firewall/compare.html
+- Quickstart: https://vburnz.github.io/mcp-gateway-firewall/docs/getting-started/quickstart.html
+- Architecture: https://vburnz.github.io/mcp-gateway-firewall/docs/understanding/architecture.html
+- Policy language: https://vburnz.github.io/mcp-gateway-firewall/docs/guides/policy.html
+- Security model: https://vburnz.github.io/mcp-gateway-firewall/docs/understanding/security-model.html
+- Attack scenarios: https://vburnz.github.io/mcp-gateway-firewall/docs/reference/attack-scenarios.html
+- Case study: https://vburnz.github.io/mcp-gateway-firewall/case-study.html
+- Comparison with alternatives: https://vburnz.github.io/mcp-gateway-firewall/compare.html

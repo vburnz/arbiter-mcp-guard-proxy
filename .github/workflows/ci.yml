@@ -83,7 +83,7 @@ jobs:
             arbiter-oauth
             arbiter-lifecycle
             arbiter-cli
-            arbiter-mcp-firewall
+            mcp-gateway-firewall
           )
           for crate in "${CRATES[@]}"; do
             echo "Checking $crate..."

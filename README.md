@@ -1,8 +1,8 @@
 # Arbiter: Firewall for MCP
 
-[![CI](https://github.com/samanthaci/arbiter-mcp-firewall/actions/workflows/ci.yml/badge.svg)](https://github.com/samanthaci/arbiter-mcp-firewall/actions/workflows/ci.yml)
+[![CI](https://github.com/vburnz/mcp-gateway-firewall/actions/workflows/ci.yml/badge.svg)](https://github.com/vburnz/mcp-gateway-firewall/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Donate](https://img.shields.io/badge/Sponsor-♡-ff69b4)](https://github.com/sponsors/samanthaci)
+[![Donate](https://img.shields.io/badge/Sponsor-♡-ff69b4)](https://github.com/sponsors/vburnz)
 
 A lightweight proxy that sits between AI agents and MCP (Model Context Protocol) servers, enforcing
 deny-by-default authorization, session budgets, drift detection, and
@@ -27,7 +27,7 @@ Arbiter is agnostic of development tooling and enforces:
 - **That you'll know** (structured audit trail of every decision)
 
 See [Why MCP Tool Calls Need a Firewall](docs/sphinx/understanding/why-agent-iam.md) for the full argument, or
-the [QuantumBank case study](https://samanthaci.github.io/arbiter-mcp-firewall/case-study.html) for a worked example
+the [QuantumBank case study](https://vburnz.github.io/mcp-gateway-firewall/case-study.html) for a worked example
 showing 2 allowed and 4 blocked tool categories.
 
 ## Limitations
@@ -74,7 +74,7 @@ Apache 2.0.
 
 This is free software with no paid tiers. If you get value from it and want to help keep it going, consider sponsoring.
 
-**[Sponsor on GitHub](https://github.com/sponsors/samanthaci)**
+**[Sponsor on GitHub](https://github.com/sponsors/vburnz)**
 
 ## Features
 
@@ -124,7 +124,7 @@ chain, crate dependency graph, and data flow.
 ## Install
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/samanthaci/arbiter-mcp-firewall/main/install.sh | sh
+curl -sSf https://raw.githubusercontent.com/vburnz/mcp-gateway-firewall/main/install.sh | sh
 ```
 
 Downloads the latest binary for your platform (Linux/macOS, amd64/arm64) with SHA256 verification. Installs both `arbiter` and `arbiter-ctl`. No sudo required.
@@ -229,7 +229,7 @@ cargo build --release
 
 The core enforcement pipeline (policy engine, session management, drift
 detection, audit logging) is complete and tested. The
-[QuantumBank scenario](https://samanthaci.github.io/arbiter-mcp-firewall/case-study.html) demonstrates end-to-end
+[QuantumBank scenario](https://vburnz.github.io/mcp-gateway-firewall/case-study.html) demonstrates end-to-end
 enforcement across 6 tool categories.
 
 This project is provided as-is.
@@ -240,7 +240,7 @@ This project is provided as-is.
 
 ## Support
 
-[GitHub Issues](https://github.com/samanthaci/arbiter-mcp-firewall/issues), no SLA,
+[GitHub Issues](https://github.com/vburnz/mcp-gateway-firewall/issues), no SLA,
 no guaranteed response time.
 
-Contact: [samantha.ireland@pm.me](mailto:samantha.ireland@pm.me)
+Contact: [veronica.burnz@pm.me](mailto:veronica.burnz@pm.me)

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const REPO: &str = "samanthaci/arbiter-mcp-firewall";
+const REPO: &str = "vburnz/mcp-gateway-firewall";
 
 /// Arbiter CLI: agent lifecycle management, diagnostics, and policy tooling.
 #[derive(Parser)]
